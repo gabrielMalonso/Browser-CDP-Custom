@@ -1,0 +1,98 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "CustomCDPBrowser-arm64-apple-macosx-debug.exe": ["<CustomCDPBrowser-arm64-apple-macosx-debug.exe>"]
+  "CustomCDPBrowser-arm64-apple-macosx-debug.module": ["<CustomCDPBrowser-arm64-apple-macosx-debug.module>"]
+  "PackageStructure": ["<PackageStructure>"]
+  "main": ["<CustomCDPBrowser-arm64-apple-macosx-debug.exe>","<CustomCDPBrowser-arm64-apple-macosx-debug.module>"]
+  "test": ["<CustomCDPBrowser-arm64-apple-macosx-debug.exe>","<CustomCDPBrowser-arm64-apple-macosx-debug.module>"]
+default: "main"
+nodes:
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser":
+    is-mutated: true
+commands:
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom-CDP-Browser_CustomCDPBrowser.bundle/AppIcon.icns":
+    tool: copy-tool
+    inputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/Resources/AppIcon.icns"]
+    outputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom-CDP-Browser_CustomCDPBrowser.bundle/AppIcon.icns"]
+    description: "Copying /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/Resources/AppIcon.icns"
+
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom-CDP-Browser_CustomCDPBrowser.bundle/MenuBarIcon.svg":
+    tool: copy-tool
+    inputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/Resources/MenuBarIcon.svg"]
+    outputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom-CDP-Browser_CustomCDPBrowser.bundle/MenuBarIcon.svg"]
+    description: "Copying /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/Resources/MenuBarIcon.svg"
+
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser-entitlement.plist":
+    tool: write-auxiliary-file
+    inputs: ["<entitlement-plist>","<com.apple.security.get-task-allow>"]
+    outputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser-entitlement.plist"]
+    description: "Write auxiliary file /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser-entitlement.plist"
+
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/AppDelegate.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/CDPProfile.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/CDPProfileLauncher.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/CustomCDPBrowserApp.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/FloatingPanel.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/ProfilePickerView.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/SettingsView.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/DerivedSources/resource_bundle_accessor.swift"]
+    outputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/sources"]
+    description: "Write auxiliary file /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/sources"
+
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.product/Objects.LinkFileList":
+    tool: write-auxiliary-file
+    inputs: ["<link-file-list>","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/AppDelegate.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CDPProfile.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CDPProfileLauncher.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CustomCDPBrowserApp.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/FloatingPanel.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/ProfilePickerView.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/SettingsView.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/resource_bundle_accessor.swift.o"]
+    outputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.product/Objects.LinkFileList"]
+    description: "Write auxiliary file /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.product/Objects.LinkFileList"
+
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"]
+    outputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+
+  "<CustomCDPBrowser-arm64-apple-macosx-debug.exe>":
+    tool: phony
+    inputs: ["<CustomCDPBrowser-arm64-apple-macosx-debug.exe-CodeSigning>"]
+    outputs: ["<CustomCDPBrowser-arm64-apple-macosx-debug.exe>"]
+
+  "<CustomCDPBrowser-arm64-apple-macosx-debug.module>":
+    tool: phony
+    inputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/AppDelegate.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CDPProfile.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CDPProfileLauncher.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CustomCDPBrowserApp.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/FloatingPanel.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/ProfilePickerView.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/SettingsView.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/resource_bundle_accessor.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Modules/CustomCDPBrowser.swiftmodule"]
+    outputs: ["<CustomCDPBrowser-arm64-apple-macosx-debug.module>"]
+
+  "C.CustomCDPBrowser-arm64-apple-macosx-debug.exe":
+    tool: shell
+    inputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/AppDelegate.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CDPProfile.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CDPProfileLauncher.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CustomCDPBrowserApp.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/FloatingPanel.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/ProfilePickerView.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/SettingsView.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/resource_bundle_accessor.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.product/Objects.LinkFileList"]
+    outputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser"]
+    description: "Linking ./.build/arm64-apple-macosx/debug/CustomCDPBrowser"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-L","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug","-o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser","-module-name","CustomCDPBrowser","-Xlinker","-no_warn_duplicate_libraries","-emit-executable","-Xlinker","-alias","-Xlinker","_CustomCDPBrowser_main","-Xlinker","_main","-Xlinker","-rpath","-Xlinker","@loader_path","@/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.product/Objects.LinkFileList","-Xlinker","-rpath","-Xlinker","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-6.2/macosx","-target","arm64-apple-macosx14.0","-Xlinker","-add_ast_path","-Xlinker","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Modules/CustomCDPBrowser.swiftmodule","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g"]
+
+  "C.CustomCDPBrowser-arm64-apple-macosx-debug.exe-entitlements":
+    tool: shell
+    inputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser-entitlement.plist"]
+    outputs: ["<CustomCDPBrowser-arm64-apple-macosx-debug.exe-CodeSigning>"]
+    description: "Applying debug entitlements to ./.build/arm64-apple-macosx/debug/CustomCDPBrowser"
+    args: ["codesign","--force","--sign","-","--entitlements","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser-entitlement.plist","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser"]
+
+  "C.CustomCDPBrowser-arm64-apple-macosx-debug.module":
+    tool: shell
+    inputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/AppDelegate.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/CDPProfile.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/CDPProfileLauncher.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/CustomCDPBrowserApp.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/FloatingPanel.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/ProfilePickerView.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/SettingsView.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/DerivedSources/resource_bundle_accessor.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt","<CustomCDPBrowser-arm64-apple-macosx-debug.module-resources>","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/sources"]
+    outputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/AppDelegate.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CDPProfile.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CDPProfileLauncher.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CustomCDPBrowserApp.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/FloatingPanel.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/ProfilePickerView.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/SettingsView.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/resource_bundle_accessor.swift.o","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Modules/CustomCDPBrowser.swiftmodule"]
+    description: "Compiling Swift Module 'CustomCDPBrowser' (8 sources)"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","CustomCDPBrowser","-emit-dependencies","-emit-module","-emit-module-path","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Modules/CustomCDPBrowser.swiftmodule","-output-file-map","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/output-file-map.json","-incremental","-c","@/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/sources","-I","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx14.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j10","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_AVAILABLE","-module-cache-path","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-Xfrontend","-entry-point-function-name","-Xfrontend","CustomCDPBrowser_main","-swift-version","5","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","custom_cdp_browser"]
+
+  "CustomCDPBrowser-arm64-apple-macosx-debug.module-resources":
+    tool: phony
+    inputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom-CDP-Browser_CustomCDPBrowser.bundle/AppIcon.icns","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom-CDP-Browser_CustomCDPBrowser.bundle/MenuBarIcon.svg"]
+    outputs: ["<CustomCDPBrowser-arm64-apple-macosx-debug.module-resources>"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Package.swift","/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+
