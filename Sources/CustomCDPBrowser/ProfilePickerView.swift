@@ -134,15 +134,9 @@ struct ProfileRow: View {
                 }
                 .frame(width: 34, height: 34)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(profile.name)
-                        .font(.body.weight(isRunning ? .semibold : .regular))
-                        .foregroundStyle(.primary)
-
-                    Text(profile.subtitle)
-                        .font(.caption2)
-                        .foregroundStyle(isRunning ? .secondary : .tertiary)
-                }
+                Text("\(profile.name) - porta \(profile.port)")
+                    .font(.body.weight(isRunning ? .semibold : .regular))
+                    .foregroundStyle(.primary)
 
                 Spacer()
 

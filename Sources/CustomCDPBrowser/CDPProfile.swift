@@ -10,7 +10,6 @@ struct CDPProfile: Identifiable, Hashable {
 
     let id: String
     let name: String
-    let subtitle: String
     let profileRoot: String
     let profileDirectory: String
     let browserAppName: String
@@ -58,7 +57,6 @@ struct CDPProfile: Identifiable, Hashable {
         CDPProfile(
             id: "pessoal",
             name: "Pessoal",
-            subtitle: "Perfil pessoal - porta 9224",
             profileRoot: "~/.chrome-cdp/pessoal",
             profileDirectory: "Default",
             browserAppName: "Helium",
@@ -69,7 +67,6 @@ struct CDPProfile: Identifiable, Hashable {
         CDPProfile(
             id: "central-es",
             name: "Central ES",
-            subtitle: "WhatsApp da central - porta 9222",
             profileRoot: "~/.chrome-cdp/central-es",
             profileDirectory: "Default",
             browserAppName: "Helium",
@@ -80,7 +77,6 @@ struct CDPProfile: Identifiable, Hashable {
         CDPProfile(
             id: "central-rj",
             name: "Central RJ",
-            subtitle: "WhatsApp da central - porta 9223",
             profileRoot: "~/.chrome-cdp/central-rj",
             profileDirectory: "Default",
             browserAppName: "Helium",
@@ -91,7 +87,6 @@ struct CDPProfile: Identifiable, Hashable {
         CDPProfile(
             id: "central-sp",
             name: "Central SP",
-            subtitle: "WhatsApp da central - porta 9225",
             profileRoot: "~/.chrome-cdp/central-sp",
             profileDirectory: "Default",
             browserAppName: "Helium",
@@ -102,7 +97,6 @@ struct CDPProfile: Identifiable, Hashable {
         CDPProfile(
             id: "financeiro-rossoni",
             name: "Financeiro Rossoni",
-            subtitle: "Gmail financeiro - porta 9226",
             profileRoot: "~/.chrome-cdp/financeiro-rossoni",
             profileDirectory: "Profile 12",
             browserAppName: "Google Chrome",
