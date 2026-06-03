@@ -121,27 +121,27 @@ struct ProfileRow: View {
     let onSelect: () -> Void
 
     var body: some View {
-        Button(action: onSelect) {
+        Button {
+            guard !isRunning else { return }
+            onSelect()
+        } label: {
             HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(iconBackground)
-                        .frame(width: 34, height: 34)
-
                     Text(profile.badgeText)
                         .font(.system(size: profile.badgeText.count > 1 ? 13 : 16, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(iconForeground)
                 }
+                .frame(width: 34, height: 34)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(profile.name)
-                        .font(.body)
+                        .font(.body.weight(isRunning ? .semibold : .regular))
                         .foregroundStyle(.primary)
 
                     Text(profile.subtitle)
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(isRunning ? .secondary : .tertiary)
                 }
 
                 Spacer()
@@ -150,42 +150,47 @@ struct ProfileRow: View {
                     ProgressView()
                         .controlSize(.small)
                 } else if isRunning {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.title3)
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.green)
+
+                        Text("Aberto")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.green)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.green.opacity(0.16))
+                    )
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isRunning ? Color.green.opacity(0.10) : Color.clear)
+                    .fill(isRunning ? Color.white.opacity(0.08) : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(isRunning ? Color.green.opacity(0.7) : Color.clear, lineWidth: 1)
+                    )
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isOpening || isRunning)
-    }
-
-    private var iconBackground: Color {
-        switch profile.kind {
-        case .personal:
-            Color.blue.opacity(0.18)
-        case .clinic:
-            Color.teal.opacity(0.18)
-        case .finance:
-            Color.orange.opacity(0.18)
-        }
+        .disabled(isOpening)
     }
 
     private var iconForeground: Color {
         switch profile.kind {
         case .personal:
-            .blue
+            Color(red: 0.0, green: 0.36, blue: 1.0)
         case .clinic:
-            .teal
+            Color(red: 0.0, green: 0.62, blue: 0.72)
         case .finance:
-            .orange
+            Color(red: 0.98, green: 0.42, blue: 0.0)
         }
     }
 }
