@@ -4,9 +4,15 @@ struct ProfilePickerView: View {
     let onDismiss: () -> Void
 
     @StateObject private var launcher = CDPProfileLauncher.shared
+    @StateObject private var linkRouter = LinkRouter.shared
     @State private var openingProfileID: String?
     @State private var closingProfileID: String?
     @State private var feedback: String?
+    @AppStorage(UserDefaultsKeys.lastSelectedProfileID) private var lastSelectedProfileID = CDPProfile.defaultProfile.id
+
+    private var hasPendingLinks: Bool {
+        !linkRouter.pendingURLs.isEmpty
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,9 +27,10 @@ struct ProfilePickerView: View {
                             profile: profile,
                             isRunning: launcher.runningProfileIDs.contains(profile.id),
                             isOpening: openingProfileID == profile.id,
-                            isClosing: closingProfileID == profile.id
+                            isClosing: closingProfileID == profile.id,
+                            allowsRunningSelection: hasPendingLinks
                         ) {
-                            open(profile)
+                            select(profile)
                         } onClose: {
                             close(profile)
                         }
@@ -43,6 +50,9 @@ struct ProfilePickerView: View {
             launcher.refreshStatuses()
         }
         .onKeyPress(.escape) {
+            if hasPendingLinks {
+                linkRouter.cancelPendingURLs()
+            }
             onDismiss()
             return .handled
         }
@@ -50,12 +60,21 @@ struct ProfilePickerView: View {
 
     private var header: some View {
         HStack {
-            Image(systemName: "network")
+            Image(systemName: hasPendingLinks ? "link" : "network")
                 .font(.title2)
                 .foregroundStyle(.secondary)
 
-            Text("Custom CDP Browser")
-                .font(.headline)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hasPendingLinks ? "Open Link" : "Custom CDP Browser")
+                    .font(.headline)
+
+                if hasPendingLinks {
+                    Text(pendingLinkSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
 
             Spacer()
 
@@ -68,8 +87,8 @@ struct ProfilePickerView: View {
 
     private var footer: some View {
         HStack {
-            if let feedback {
-                Text(feedback)
+            if let visibleFeedback = feedback ?? linkRouter.feedback {
+                Text(visibleFeedback)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -98,6 +117,25 @@ struct ProfilePickerView: View {
         .padding(.vertical, 8)
     }
 
+    private var pendingLinkSummary: String {
+        guard let firstURL = linkRouter.pendingURLs.first else {
+            return ""
+        }
+
+        let prefix = linkRouter.pendingURLs.count > 1 ? "\(linkRouter.pendingURLs.count) links - " : ""
+        return prefix + (firstURL.host ?? firstURL.absoluteString)
+    }
+
+    private func select(_ profile: CDPProfile) {
+        lastSelectedProfileID = profile.id
+
+        if hasPendingLinks {
+            routePendingLinks(to: profile)
+        } else {
+            open(profile)
+        }
+    }
+
     private func open(_ profile: CDPProfile) {
         openingProfileID = profile.id
         feedback = "Opening \(profile.name)..."
@@ -108,6 +146,25 @@ struct ProfilePickerView: View {
             switch result {
             case .success:
                 feedback = "\(profile.name) is ready on port \(profile.port)"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    onDismiss()
+                }
+            case .failure(let error):
+                feedback = error.localizedDescription
+            }
+        }
+    }
+
+    private func routePendingLinks(to profile: CDPProfile) {
+        openingProfileID = profile.id
+        feedback = "Opening link in \(profile.name)..."
+
+        linkRouter.routePendingURLs(to: profile) { result in
+            openingProfileID = nil
+
+            switch result {
+            case .success:
+                feedback = "Opened in \(profile.name)"
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                     onDismiss()
                 }
@@ -139,6 +196,7 @@ struct ProfileRow: View {
     let isRunning: Bool
     let isOpening: Bool
     let isClosing: Bool
+    let allowsRunningSelection: Bool
     let onSelect: () -> Void
     let onClose: () -> Void
 
@@ -196,7 +254,7 @@ struct ProfileRow: View {
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            guard !isRunning, !isOpening, !isClosing else { return }
+            guard (!isRunning || allowsRunningSelection), !isOpening, !isClosing else { return }
             onSelect()
         }
         .disabled(isOpening || isClosing)

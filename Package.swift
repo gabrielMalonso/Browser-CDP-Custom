@@ -17,5 +17,9 @@ let package = Package(
                 .copy("Resources/MenuBarIcon.svg"),
             ]
         ),
+        .testTarget(
+            name: "CustomCDPBrowserTests",
+            dependencies: ["CustomCDPBrowser"]
+        ),
     ]
 )
