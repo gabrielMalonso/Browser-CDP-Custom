@@ -52,6 +52,37 @@ final class CDPProfileLauncher: ObservableObject {
         }
     }
 
+    func close(_ profile: CDPProfile, completion: @escaping (Result<Void, Error>) -> Void) {
+        Task {
+            do {
+                let processIDs = try Self.processIDsListening(on: profile.port)
+                guard !processIDs.isEmpty else {
+                    await MainActor.run {
+                        self.refreshStatuses()
+                        completion(.success(()))
+                    }
+                    return
+                }
+
+                try Self.terminate(processIDs: processIDs)
+                let didClose = await Self.waitForEndpointToStop(profile.endpoint)
+
+                await MainActor.run {
+                    self.refreshStatuses()
+                    if didClose {
+                        completion(.success(()))
+                    } else {
+                        completion(.failure(LauncherError.endpointStillResponding(profile.port)))
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
     private func cleanLocks(for profile: CDPProfile) {
         let root = profile.expandedProfileRoot
         let profileDir = (root as NSString).appendingPathComponent(profile.profileDirectory)
@@ -114,15 +145,75 @@ final class CDPProfileLauncher: ObservableObject {
         }
         return false
     }
+
+    private static func waitForEndpointToStop(_ endpoint: URL) async -> Bool {
+        for _ in 0..<5 {
+            if await !checkEndpoint(endpoint) {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        return false
+    }
+
+    private static func processIDsListening(on port: Int) throws -> [String] {
+        let process = Process()
+        let output = Pipe()
+
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        process.arguments = ["-tiTCP:\(port)", "-sTCP:LISTEN"]
+        process.standardOutput = output
+        process.standardError = Pipe()
+
+        try process.run()
+        process.waitUntilExit()
+
+        if process.terminationStatus == 1 {
+            return []
+        }
+
+        guard process.terminationStatus == 0 else {
+            throw LauncherError.processLookupFailed(port)
+        }
+
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)?
+            .split(whereSeparator: \.isNewline)
+            .map(String.init) ?? []
+    }
+
+    private static func terminate(processIDs: [String]) throws {
+        let process = Process()
+
+        process.executableURL = URL(fileURLWithPath: "/bin/kill")
+        process.arguments = processIDs
+        process.standardError = Pipe()
+
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            throw LauncherError.processTerminationFailed
+        }
+    }
 }
 
 enum LauncherError: LocalizedError {
     case endpointDidNotRespond(Int)
+    case endpointStillResponding(Int)
+    case processLookupFailed(Int)
+    case processTerminationFailed
 
     var errorDescription: String? {
         switch self {
         case .endpointDidNotRespond(let port):
             "Helium opened, but CDP port \(port) did not respond."
+        case .endpointStillResponding(let port):
+            "Browser on CDP port \(port) did not close."
+        case .processLookupFailed(let port):
+            "Could not find the browser process on CDP port \(port)."
+        case .processTerminationFailed:
+            "Could not close the browser process."
         }
     }
 }
