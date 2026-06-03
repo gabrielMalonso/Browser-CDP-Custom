@@ -127,6 +127,8 @@ final class CDPProfileLauncher: ObservableObject {
     }
 
     private func launchBrowser(for profile: CDPProfile, initialURL: URL?) throws {
+        try ensureDownloadPreferences(for: profile)
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
 
@@ -149,6 +151,58 @@ final class CDPProfileLauncher: ObservableObject {
 
         process.arguments = arguments
         try process.run()
+    }
+
+    private func ensureDownloadPreferences(for profile: CDPProfile) throws {
+        let preferencesURL = URL(fileURLWithPath: profile.preferencesPath)
+        try fileManager.createDirectory(
+            at: preferencesURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        let preferences = try Self.readPreferences(at: preferencesURL)
+        let updatedPreferences = Self.preferencesWithDownloadDirectory(
+            preferences,
+            downloadDirectory: profile.expandedDownloadDirectory
+        )
+        let data = try JSONSerialization.data(
+            withJSONObject: updatedPreferences,
+            options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        )
+
+        try data.write(to: preferencesURL, options: .atomic)
+    }
+
+    static func preferencesWithDownloadDirectory(
+        _ preferences: [String: Any],
+        downloadDirectory: String
+    ) -> [String: Any] {
+        var updatedPreferences = preferences
+
+        var download = preferences["download"] as? [String: Any] ?? [:]
+        download["default_directory"] = downloadDirectory
+        download["directory_upgrade"] = true
+        download["prompt_for_download"] = false
+        updatedPreferences["download"] = download
+
+        var savefile = preferences["savefile"] as? [String: Any] ?? [:]
+        savefile["default_directory"] = downloadDirectory
+        updatedPreferences["savefile"] = savefile
+
+        return updatedPreferences
+    }
+
+    private static func readPreferences(at url: URL) throws -> [String: Any] {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return [:]
+        }
+
+        let data = try Data(contentsOf: url)
+        guard !data.isEmpty else {
+            return [:]
+        }
+
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
     }
 
     static func newTabEndpoint(for url: URL, port: Int) -> URL {
