@@ -25,6 +25,15 @@ struct CDPProfile: Identifiable, Hashable {
         NSString(string: profileRoot).expandingTildeInPath
     }
 
+    var preferencesPath: String {
+        let profilePath = (expandedProfileRoot as NSString).appendingPathComponent(profileDirectory)
+        return (profilePath as NSString).appendingPathComponent("Preferences")
+    }
+
+    var expandedDownloadDirectory: String {
+        NSString(string: Self.downloadDirectory).expandingTildeInPath
+    }
+
     var symbolName: String {
         switch kind {
         case .personal:
@@ -52,6 +61,8 @@ struct CDPProfile: Identifiable, Hashable {
             String(name.prefix(1))
         }
     }
+
+    static let downloadDirectory = "~/Downloads"
 
     static let visibleProfiles: [CDPProfile] = [
         CDPProfile(

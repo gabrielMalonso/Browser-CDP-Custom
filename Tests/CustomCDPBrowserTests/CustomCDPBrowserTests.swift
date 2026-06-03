@@ -31,6 +31,44 @@ final class CustomCDPBrowserTests: XCTestCase {
         XCTAssertEqual(CDPProfile.profile(withID: nil).id, "pessoal")
     }
 
+    func testProfilesUseDownloadsAsManualDownloadDirectory() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+
+        for profile in CDPProfile.visibleProfiles {
+            XCTAssertEqual(profile.expandedDownloadDirectory, "\(home)/Downloads")
+            XCTAssertTrue(profile.preferencesPath.hasSuffix("/\(profile.profileDirectory)/Preferences"))
+        }
+    }
+
+    @MainActor
+    func testDownloadPreferencesPreserveExistingKeys() {
+        let updatedPreferences = CDPProfileLauncher.preferencesWithDownloadDirectory(
+            [
+                "existing": "value",
+                "download": [
+                    "default_directory": "/tmp/old",
+                    "some_other_key": "kept",
+                ],
+                "savefile": [
+                    "default_directory": "/tmp/old-save",
+                    "another_key": "kept",
+                ],
+            ],
+            downloadDirectory: "/Users/gabrielalonso/Downloads"
+        )
+
+        let download = updatedPreferences["download"] as? [String: Any]
+        let savefile = updatedPreferences["savefile"] as? [String: Any]
+
+        XCTAssertEqual(updatedPreferences["existing"] as? String, "value")
+        XCTAssertEqual(download?["default_directory"] as? String, "/Users/gabrielalonso/Downloads")
+        XCTAssertEqual(download?["directory_upgrade"] as? Bool, true)
+        XCTAssertEqual(download?["prompt_for_download"] as? Bool, false)
+        XCTAssertEqual(download?["some_other_key"] as? String, "kept")
+        XCTAssertEqual(savefile?["default_directory"] as? String, "/Users/gabrielalonso/Downloads")
+        XCTAssertEqual(savefile?["another_key"] as? String, "kept")
+    }
+
     @MainActor
     func testNewTabEndpointPreservesQueryAndFragment() {
         let url = URL(string: "https://example.com/path?q=one%20two&next=/x#section")!
