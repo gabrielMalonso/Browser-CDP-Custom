@@ -105,4 +105,16 @@ struct CDPProfile: Identifiable, Hashable {
             kind: .finance
         ),
     ]
+
+    static var defaultProfile: CDPProfile {
+        visibleProfiles[0]
+    }
+
+    static func profile(withID id: String?) -> CDPProfile {
+        guard let id, let profile = visibleProfiles.first(where: { $0.id == id }) else {
+            return defaultProfile
+        }
+
+        return profile
+    }
 }

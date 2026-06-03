@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom_CDP_BrowserPackageTests.build/primary.swiftdeps"
+  },
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom-CDP-BrowserPackageTests.derived/runner.swift": {
+    "dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom_CDP_BrowserPackageTests.build/runner.d",
+    "object": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom_CDP_BrowserPackageTests.build/runner.swift.o",
+    "swiftmodule": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom_CDP_BrowserPackageTests.build/runner~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom_CDP_BrowserPackageTests.build/runner.swiftdeps",
+    "diagnostics": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom_CDP_BrowserPackageTests.build/runner.dia"
+  }
+}

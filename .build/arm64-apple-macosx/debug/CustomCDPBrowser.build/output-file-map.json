@@ -30,12 +30,40 @@
     "swift-dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CustomCDPBrowserApp.swiftdeps",
     "diagnostics": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/CustomCDPBrowserApp.dia"
   },
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/DefaultBrowserManager.swift": {
+    "dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/DefaultBrowserManager.d",
+    "object": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/DefaultBrowserManager.swift.o",
+    "swiftmodule": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/DefaultBrowserManager~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/DefaultBrowserManager.swiftdeps",
+    "diagnostics": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/DefaultBrowserManager.dia"
+  },
   "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/FloatingPanel.swift": {
     "dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/FloatingPanel.d",
     "object": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/FloatingPanel.swift.o",
     "swiftmodule": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/FloatingPanel~partial.swiftmodule",
     "swift-dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/FloatingPanel.swiftdeps",
     "diagnostics": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/FloatingPanel.dia"
+  },
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/LaunchAtLogin.swift": {
+    "dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LaunchAtLogin.d",
+    "object": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LaunchAtLogin.swift.o",
+    "swiftmodule": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LaunchAtLogin~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LaunchAtLogin.swiftdeps",
+    "diagnostics": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LaunchAtLogin.dia"
+  },
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/LinkRouter.swift": {
+    "dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LinkRouter.d",
+    "object": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LinkRouter.swift.o",
+    "swiftmodule": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LinkRouter~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LinkRouter.swiftdeps",
+    "diagnostics": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LinkRouter.dia"
+  },
+  "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/LinkRoutingMode.swift": {
+    "dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LinkRoutingMode.d",
+    "object": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LinkRoutingMode.swift.o",
+    "swiftmodule": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LinkRoutingMode~partial.swiftmodule",
+    "swift-dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LinkRoutingMode.swiftdeps",
+    "diagnostics": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/LinkRoutingMode.dia"
   },
   "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/ProfilePickerView.swift": {
     "dependencies": "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/CustomCDPBrowser.build/ProfilePickerView.d",

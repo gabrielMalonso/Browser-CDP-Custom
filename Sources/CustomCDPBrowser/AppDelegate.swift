@@ -16,6 +16,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        LinkRouter.shared.onShowOverlay = { [weak self] in
+            self?.showPanel()
+        }
+
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
 
         if let icnsURL = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
            let icon = NSImage(contentsOf: icnsURL) {
@@ -43,6 +53,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        showPanel()
+    }
+
+    func showPanel() {
+        if isShowing {
+            panel?.orderFrontRegardless()
+            panel?.makeKey()
+            NSApp.activate()
+            return
+        }
+
         let panel = FloatingPanel {
             ProfilePickerView {
                 self.closePanel()
@@ -62,6 +83,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.makeKey()
         NSApp.activate()
         isShowing = true
+    }
+
+    @objc func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
+        guard
+            let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+            let url = URL(string: urlString),
+            let scheme = url.scheme?.lowercased(),
+            ["http", "https"].contains(scheme)
+        else {
+            return
+        }
+
+        LinkRouter.shared.handleIncomingURL(url)
     }
 
     private func closePanel() {

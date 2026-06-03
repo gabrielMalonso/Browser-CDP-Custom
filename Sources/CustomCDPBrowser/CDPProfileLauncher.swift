@@ -32,9 +32,13 @@ final class CDPProfileLauncher: ObservableObject {
     }
 
     func open(_ profile: CDPProfile, completion: @escaping (Result<Void, Error>) -> Void) {
+        ensureRunning(profile, initialURL: nil, completion: completion)
+    }
+
+    func ensureRunning(_ profile: CDPProfile, initialURL: URL?, completion: @escaping (Result<Void, Error>) -> Void) {
         do {
             cleanLocks(for: profile)
-            try launchHelium(for: profile)
+            try launchBrowser(for: profile, initialURL: initialURL)
 
             Task {
                 let ok = await Self.waitForEndpoint(profile.endpoint)
@@ -49,6 +53,30 @@ final class CDPProfileLauncher: ObservableObject {
             }
         } catch {
             completion(.failure(error))
+        }
+    }
+
+    func openURL(_ url: URL, in profile: CDPProfile, completion: @escaping (Result<Void, Error>) -> Void) {
+        Task {
+            if await Self.checkEndpoint(profile.endpoint) {
+                do {
+                    try await Self.openNewTab(url, port: profile.port)
+
+                    await MainActor.run {
+                        self.refreshStatuses()
+                        completion(.success(()))
+                    }
+                } catch {
+                    await MainActor.run {
+                        completion(.failure(error))
+                    }
+                }
+                return
+            }
+
+            await MainActor.run {
+                self.ensureRunning(profile, initialURL: url, completion: completion)
+            }
         }
     }
 
@@ -98,7 +126,7 @@ final class CDPProfileLauncher: ObservableObject {
         }
     }
 
-    private func launchHelium(for profile: CDPProfile) throws {
+    private func launchBrowser(for profile: CDPProfile, initialURL: URL?) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
 
@@ -113,12 +141,20 @@ final class CDPProfileLauncher: ObservableObject {
             "--disable-features=DevToolsDebuggingRestrictions",
         ]
 
-        if let defaultURL = profile.defaultURL {
+        if let initialURL {
+            arguments.append(initialURL.absoluteString)
+        } else if let defaultURL = profile.defaultURL {
             arguments.append(defaultURL)
         }
 
         process.arguments = arguments
         try process.run()
+    }
+
+    static func newTabEndpoint(for url: URL, port: Int) -> URL {
+        let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+        let encodedURL = url.absoluteString.addingPercentEncoding(withAllowedCharacters: allowedCharacters) ?? url.absoluteString
+        return URL(string: "http://127.0.0.1:\(port)/json/new?\(encodedURL)")!
     }
 
     private static func checkEndpoint(_ endpoint: URL) async -> Bool {
@@ -154,6 +190,18 @@ final class CDPProfileLauncher: ObservableObject {
             try? await Task.sleep(for: .milliseconds(500))
         }
         return false
+    }
+
+    private static func openNewTab(_ url: URL, port: Int) async throws {
+        var request = URLRequest(url: newTabEndpoint(for: url, port: port))
+        request.httpMethod = "PUT"
+        request.timeoutInterval = 4
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode
+            throw LauncherError.openTabFailed(url: url, port: port, statusCode: statusCode)
+        }
     }
 
     private static func processIDsListening(on port: Int) throws -> [String] {
@@ -201,6 +249,7 @@ final class CDPProfileLauncher: ObservableObject {
 enum LauncherError: LocalizedError {
     case endpointDidNotRespond(Int)
     case endpointStillResponding(Int)
+    case openTabFailed(url: URL, port: Int, statusCode: Int?)
     case processLookupFailed(Int)
     case processTerminationFailed
 
@@ -210,6 +259,12 @@ enum LauncherError: LocalizedError {
             "Helium opened, but CDP port \(port) did not respond."
         case .endpointStillResponding(let port):
             "Browser on CDP port \(port) did not close."
+        case .openTabFailed(let url, let port, let statusCode):
+            if let statusCode {
+                "Could not open \(url.absoluteString) on CDP port \(port). DevTools returned \(statusCode)."
+            } else {
+                "Could not open \(url.absoluteString) on CDP port \(port)."
+            }
         case .processLookupFailed(let port):
             "Could not find the browser process on CDP port \(port)."
         case .processTerminationFailed:

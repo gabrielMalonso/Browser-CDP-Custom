@@ -2,8 +2,11 @@
 /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/CDPProfile.swift
 /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/CDPProfileLauncher.swift
 /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/CustomCDPBrowserApp.swift
+/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/DefaultBrowserManager.swift
 /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/FloatingPanel.swift
 /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/LaunchAtLogin.swift
+/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/LinkRouter.swift
+/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/LinkRoutingMode.swift
 /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/ProfilePickerView.swift
 /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/Sources/CustomCDPBrowser/SettingsView.swift
 /Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/release/CustomCDPBrowser.build/DerivedSources/resource_bundle_accessor.swift
