@@ -5,6 +5,7 @@ struct ProfilePickerView: View {
 
     @StateObject private var launcher = CDPProfileLauncher.shared
     @State private var openingProfileID: String?
+    @State private var closingProfileID: String?
     @State private var feedback: String?
 
     var body: some View {
@@ -19,9 +20,12 @@ struct ProfilePickerView: View {
                         ProfileRow(
                             profile: profile,
                             isRunning: launcher.runningProfileIDs.contains(profile.id),
-                            isOpening: openingProfileID == profile.id
+                            isOpening: openingProfileID == profile.id,
+                            isClosing: closingProfileID == profile.id
                         ) {
                             open(profile)
+                        } onClose: {
+                            close(profile)
                         }
                     }
                 }
@@ -112,69 +116,90 @@ struct ProfilePickerView: View {
             }
         }
     }
+
+    private func close(_ profile: CDPProfile) {
+        closingProfileID = profile.id
+        feedback = "Closing \(profile.name)..."
+
+        launcher.close(profile) { result in
+            closingProfileID = nil
+
+            switch result {
+            case .success:
+                feedback = "\(profile.name) closed"
+            case .failure(let error):
+                feedback = error.localizedDescription
+            }
+        }
+    }
 }
 
 struct ProfileRow: View {
     let profile: CDPProfile
     let isRunning: Bool
     let isOpening: Bool
+    let isClosing: Bool
     let onSelect: () -> Void
+    let onClose: () -> Void
 
     var body: some View {
-        Button {
-            guard !isRunning else { return }
-            onSelect()
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Text(profile.badgeText)
-                        .font(.system(size: profile.badgeText.count > 1 ? 13 : 16, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(iconForeground)
-                }
-                .frame(width: 34, height: 34)
+        HStack(spacing: 12) {
+            ZStack {
+                Text(profile.badgeText)
+                    .font(.system(size: profile.badgeText.count > 1 ? 13 : 16, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(iconForeground)
+            }
+            .frame(width: 34, height: 34)
 
-                Text("\(profile.name) - porta \(profile.port)")
-                    .font(.body.weight(isRunning ? .semibold : .regular))
-                    .foregroundStyle(.primary)
+            Text("\(profile.name) - porta \(profile.port)")
+                .font(.body.weight(isRunning ? .semibold : .regular))
+                .foregroundStyle(.primary)
 
-                Spacer()
+            Spacer()
 
-                if isOpening {
-                    ProgressView()
-                        .controlSize(.small)
-                } else if isRunning {
-                    HStack(spacing: 6) {
+            if isOpening || isClosing {
+                ProgressView()
+                    .controlSize(.small)
+            } else if isRunning {
+                HStack(spacing: 8) {
+                    ZStack {
                         Image(systemName: "checkmark.circle.fill")
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(.green)
-
-                        Text("Aberto")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.green)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color.green.opacity(0.16))
-                    )
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(Color.green.opacity(0.16)))
+
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .background(Circle().fill(Color.primary.opacity(0.06)))
+                    .help("Close \(profile.name)")
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isRunning ? Color.white.opacity(0.08) : Color.clear)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(isRunning ? Color.green.opacity(0.7) : Color.clear, lineWidth: 1)
-                    )
-            )
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .disabled(isOpening)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isRunning ? Color.white.opacity(0.08) : Color.clear)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(isRunning ? Color.green.opacity(0.7) : Color.clear, lineWidth: 1)
+                )
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard !isRunning, !isOpening, !isClosing else { return }
+            onSelect()
+        }
+        .disabled(isOpening || isClosing)
     }
 
     private var iconForeground: Color {
