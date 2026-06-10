@@ -7,6 +7,7 @@ struct ProfilePickerView: View {
     @StateObject private var linkRouter = LinkRouter.shared
     @State private var openingProfileID: String?
     @State private var closingProfileID: String?
+    @State private var disconnectingMCPProfileID: String?
     @State private var feedback: String?
     @AppStorage(UserDefaultsKeys.lastSelectedProfileID) private var lastSelectedProfileID = CDPProfile.defaultProfile.id
 
@@ -26,11 +27,15 @@ struct ProfilePickerView: View {
                         ProfileRow(
                             profile: profile,
                             isRunning: launcher.runningProfileIDs.contains(profile.id),
+                            mcpClientCount: launcher.mcpClientsByProfileID[profile.id]?.count ?? 0,
                             isOpening: openingProfileID == profile.id,
                             isClosing: closingProfileID == profile.id,
+                            isDisconnectingMCP: disconnectingMCPProfileID == profile.id,
                             allowsRunningSelection: hasPendingLinks
                         ) {
                             select(profile)
+                        } onDisconnectMCP: {
+                            disconnectMCPClients(for: profile)
                         } onClose: {
                             close(profile)
                         }
@@ -189,15 +194,38 @@ struct ProfilePickerView: View {
             }
         }
     }
+
+    private func disconnectMCPClients(for profile: CDPProfile) {
+        disconnectingMCPProfileID = profile.id
+        feedback = "Disconnecting MCP clients from \(profile.name)..."
+
+        launcher.disconnectMCPClients(for: profile) { result in
+            disconnectingMCPProfileID = nil
+
+            switch result {
+            case .success(let disconnectedCount):
+                if disconnectedCount == 0 {
+                    feedback = "No MCP clients connected to \(profile.name)"
+                } else {
+                    feedback = "Disconnected \(disconnectedCount) MCP client\(disconnectedCount == 1 ? "" : "s") from \(profile.name)"
+                }
+            case .failure(let error):
+                feedback = error.localizedDescription
+            }
+        }
+    }
 }
 
 struct ProfileRow: View {
     let profile: CDPProfile
     let isRunning: Bool
+    let mcpClientCount: Int
     let isOpening: Bool
     let isClosing: Bool
+    let isDisconnectingMCP: Bool
     let allowsRunningSelection: Bool
     let onSelect: () -> Void
+    let onDisconnectMCP: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -210,17 +238,53 @@ struct ProfileRow: View {
             }
             .frame(width: 34, height: 34)
 
-            Text("\(profile.name) - porta \(profile.port)")
-                .font(.body.weight(isRunning ? .semibold : .regular))
-                .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(profile.name) - porta \(profile.port)")
+                    .font(.body.weight(isRunning ? .semibold : .regular))
+                    .foregroundStyle(.primary)
+
+                if mcpClientCount > 0 {
+                    HStack(spacing: 5) {
+                        Image(systemName: "bolt.horizontal.circle.fill")
+                            .font(.caption)
+                            .symbolRenderingMode(.hierarchical)
+
+                        Text("\(mcpClientCount) MCP ativo\(mcpClientCount == 1 ? "" : "s")")
+                            .font(.caption.weight(.semibold))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.orange.opacity(0.16)))
+                }
+            }
 
             Spacer()
 
-            if isOpening || isClosing {
+            if isOpening || isClosing || isDisconnectingMCP {
                 ProgressView()
                     .controlSize(.small)
             } else if isRunning {
                 HStack(spacing: 8) {
+                    if mcpClientCount > 0 {
+                        Button(action: onDisconnectMCP) {
+                            Label("Liberar", systemImage: "bolt.slash.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.orange)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .background(Capsule().fill(Color.orange.opacity(0.14)))
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(Color.orange.opacity(0.34), lineWidth: 1)
+                        )
+                        .help("Liberar upload desconectando MCP clients de \(profile.name)")
+                    }
+
                     ZStack {
                         Image(systemName: "checkmark.circle.fill")
                             .symbolRenderingMode(.hierarchical)
@@ -254,10 +318,10 @@ struct ProfileRow: View {
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            guard (!isRunning || allowsRunningSelection), !isOpening, !isClosing else { return }
+            guard (!isRunning || allowsRunningSelection), !isOpening, !isClosing, !isDisconnectingMCP else { return }
             onSelect()
         }
-        .disabled(isOpening || isClosing)
+        .disabled(isOpening || isClosing || isDisconnectingMCP)
     }
 
     private var iconForeground: Color {

@@ -82,6 +82,100 @@ final class CustomCDPBrowserTests: XCTestCase {
         XCTAssertEqual(encodedURL?.removingPercentEncoding, url.absoluteString)
     }
 
+    func testLsofProcessIDParsingDeduplicatesInStableOrder() {
+        XCTAssertEqual(
+            CDPProcessInspector.uniqueProcessIDs(from: "123\n456\n123\n\n789\n"),
+            ["123", "456", "789"]
+        )
+    }
+
+    func testMCPCommandFilterRequiresPlaywrightMCPAndMatchingEndpointPort() {
+        XCTAssertTrue(
+            CDPProcessInspector.isPlaywrightMCPCommand(
+                "node /usr/local/bin/playwright-mcp --cdp-endpoint http://127.0.0.1:9224",
+                for: 9224
+            )
+        )
+        XCTAssertTrue(
+            CDPProcessInspector.isPlaywrightMCPCommand(
+                "node /usr/local/bin/playwright-mcp --cdp-endpoint=http://127.0.0.1:9224",
+                for: 9224
+            )
+        )
+        XCTAssertTrue(
+            CDPProcessInspector.isPlaywrightMCPCommand(
+                "node /usr/local/bin/playwright-mcp --cdp-endpoint http://localhost:9224",
+                for: 9224
+            )
+        )
+        XCTAssertFalse(
+            CDPProcessInspector.isPlaywrightMCPCommand(
+                "node /usr/local/bin/playwright-mcp --cdp-endpoint http://127.0.0.1:9223",
+                for: 9224
+            )
+        )
+        XCTAssertFalse(
+            CDPProcessInspector.isPlaywrightMCPCommand(
+                "node /tmp/server.js --cdp-endpoint http://127.0.0.1:9224",
+                for: 9224
+            )
+        )
+        XCTAssertFalse(
+            CDPProcessInspector.isPlaywrightMCPCommand(
+                "/Applications/Helium.app/Contents/MacOS/Helium --remote-debugging-port=9224",
+                for: 9224
+            )
+        )
+    }
+
+    func testMCPClientsAreFilteredAndSortedByProcessID() {
+        let clients = CDPProcessInspector.clients(
+            from: [
+                "456": "node playwright-mcp --cdp-endpoint http://127.0.0.1:9223",
+                "123": "node playwright-mcp --cdp-endpoint http://127.0.0.1:9224",
+                "789": "node other.js --cdp-endpoint http://127.0.0.1:9224",
+                "234": "node /opt/bin/playwright-mcp --cdp-endpoint=http://127.0.0.1:9224",
+            ],
+            port: 9224
+        )
+
+        XCTAssertEqual(clients.map(\.processID), ["123", "234"])
+    }
+
+    func testProcessListParsingPreservesCommandsWithSpaces() {
+        let commands = CDPProcessInspector.processCommands(
+            from: """
+              123 node /tmp/playwright-mcp --cdp-endpoint http://127.0.0.1:9224
+              456 /Applications/Helium.app/Contents/MacOS/Helium --remote-debugging-port=9224
+
+            """
+        )
+
+        XCTAssertEqual(
+            commands["123"],
+            "node /tmp/playwright-mcp --cdp-endpoint http://127.0.0.1:9224"
+        )
+        XCTAssertEqual(
+            commands["456"],
+            "/Applications/Helium.app/Contents/MacOS/Helium --remote-debugging-port=9224"
+        )
+    }
+
+    func testProcessInspectorBuildsSafeSystemToolArguments() {
+        XCTAssertEqual(
+            CDPProcessInspector.processListArguments(),
+            ["-axo", "pid=,command="]
+        )
+        XCTAssertEqual(
+            CDPProcessInspector.establishedLsofArguments(for: 9224),
+            ["-nP", "-tiTCP:9224", "-sTCP:ESTABLISHED"]
+        )
+        XCTAssertEqual(
+            CDPProcessInspector.psCommandArguments(for: "123"),
+            ["-ww", "-p", "123", "-o", "command="]
+        )
+    }
+
     @MainActor
     func testRoutingDecisionUsesConfiguredMode() {
         XCTAssertEqual(
