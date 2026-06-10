@@ -1,5 +1,28 @@
 import SwiftUI
 
+private enum PanelTheme {
+    static let background = LinearGradient(
+        colors: [
+            Color(red: 0.97, green: 0.95, blue: 0.92),
+            Color(red: 0.95, green: 0.93, blue: 0.90)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    static let card = Color.white.opacity(0.68)
+    static let border = Color.black.opacity(0.06)
+    static let shadow = Color.black.opacity(0.08)
+    static let accent = Color(red: 0.77, green: 0.42, blue: 0.21)
+    static let success = Color(red: 0.37, green: 0.53, blue: 0.42)
+    static let textPrimary = Color(red: 0.12, green: 0.11, blue: 0.10)
+    static let textMuted = Color.black.opacity(0.55)
+    static let badgePersonal = Color(red: 0.01, green: 0.32, blue: 0.88)
+    static let badgeClinic = Color(red: 0.12, green: 0.53, blue: 0.63)
+    static let badgeFinance = Color(red: 0.82, green: 0.38, blue: 0.18)
+    static let cardRadius: CGFloat = 12
+    static let panelRadius: CGFloat = 14
+}
+
 struct ProfilePickerView: View {
     let onDismiss: () -> Void
 
@@ -8,6 +31,7 @@ struct ProfilePickerView: View {
     @State private var openingProfileID: String?
     @State private var closingProfileID: String?
     @State private var disconnectingMCPProfileID: String?
+    @State private var expandedProfileID: String?
     @State private var feedback: String?
     @AppStorage(UserDefaultsKeys.lastSelectedProfileID) private var lastSelectedProfileID = CDPProfile.defaultProfile.id
 
@@ -19,38 +43,47 @@ struct ProfilePickerView: View {
         VStack(spacing: 0) {
             header
 
-            Divider()
-
-            ScrollView {
-                VStack(spacing: 4) {
-                    ForEach(CDPProfile.visibleProfiles) { profile in
-                        ProfileRow(
-                            profile: profile,
-                            isRunning: launcher.runningProfileIDs.contains(profile.id),
-                            mcpClientCount: launcher.mcpClientsByProfileID[profile.id]?.count ?? 0,
-                            isOpening: openingProfileID == profile.id,
-                            isClosing: closingProfileID == profile.id,
-                            isDisconnectingMCP: disconnectingMCPProfileID == profile.id,
-                            allowsRunningSelection: hasPendingLinks
-                        ) {
-                            select(profile)
-                        } onDisconnectMCP: {
-                            disconnectMCPClients(for: profile)
-                        } onClose: {
-                            close(profile)
-                        }
+        ScrollView {
+            VStack(spacing: 10) {
+                ForEach(CDPProfile.visibleProfiles) { profile in
+                    ProfileRow(
+                        profile: profile,
+                        isRunning: launcher.runningProfileIDs.contains(profile.id),
+                        mcpClientCount: launcher.mcpClientsByProfileID[profile.id]?.count ?? 0,
+                        isOpening: openingProfileID == profile.id,
+                        isClosing: closingProfileID == profile.id,
+                        isDisconnectingMCP: disconnectingMCPProfileID == profile.id,
+                        allowsRunningSelection: hasPendingLinks,
+                        isExpanded: expandedProfileID == profile.id
+                    ) {
+                        select(profile)
+                    } onToggleDetails: {
+                        toggleDetails(for: profile)
+                    } onDisconnectMCP: {
+                        disconnectMCPClients(for: profile)
+                    } onClose: {
+                        close(profile)
                     }
                 }
-                .padding(8)
             }
-
-            Divider()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .padding(.trailing, 4)
+        }
+        .scrollIndicators(.hidden)
 
             footer
         }
-        .frame(width: 380, height: 380)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .frame(width: 420, height: 470)
+        .background(
+            PanelTheme.background
+                .overlay(
+                    RoundedRectangle(cornerRadius: PanelTheme.panelRadius)
+                        .fill(.ultraThinMaterial)
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.panelRadius))
+        .shadow(color: PanelTheme.shadow, radius: 18, x: 0, y: 12)
         .onAppear {
             launcher.refreshStatuses()
         }
@@ -64,38 +97,44 @@ struct ProfilePickerView: View {
     }
 
     private var header: some View {
-        HStack {
-            Image(systemName: hasPendingLinks ? "link" : "network")
-                .font(.title2)
-                .foregroundStyle(.secondary)
+        HStack(alignment: .center, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: hasPendingLinks ? "link" : "globe.europe.africa.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(PanelTheme.accent)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(hasPendingLinks ? "Open Link" : "Custom CDP Browser")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(hasPendingLinks ? "Abrir link" : "Custom CDP Browser")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(PanelTheme.textPrimary)
 
-                if hasPendingLinks {
-                    Text(pendingLinkSummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    if hasPendingLinks {
+                        Text(pendingLinkSummary)
+                            .font(.caption)
+                            .foregroundStyle(PanelTheme.textMuted)
+                            .lineLimit(1)
+                    }
                 }
             }
 
             Spacer()
 
-            Text("ESC to close")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            HStack(spacing: 12) {
+                Text("ESC para fechar")
+                    .font(.caption)
+                    .foregroundStyle(PanelTheme.textMuted)
+            }
         }
-        .padding()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 10) {
             if let visibleFeedback = feedback ?? linkRouter.feedback {
                 Text(visibleFeedback)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PanelTheme.textMuted)
                     .lineLimit(1)
             }
 
@@ -106,20 +145,28 @@ struct ProfilePickerView: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PanelTheme.textMuted)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle().fill(PanelTheme.border.opacity(0.6))
+                    )
             }
             .buttonStyle(.plain)
-            .help("Refresh CDP status")
+            .help("Atualizar status do CDP")
 
             SettingsLink {
                 Image(systemName: "gearshape")
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PanelTheme.textMuted)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle().fill(PanelTheme.border.opacity(0.6))
+                    )
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 
     private var pendingLinkSummary: String {
@@ -127,7 +174,7 @@ struct ProfilePickerView: View {
             return ""
         }
 
-        let prefix = linkRouter.pendingURLs.count > 1 ? "\(linkRouter.pendingURLs.count) links - " : ""
+        let prefix = linkRouter.pendingURLs.count > 1 ? "\(linkRouter.pendingURLs.count) links · " : ""
         return prefix + (firstURL.host ?? firstURL.absoluteString)
     }
 
@@ -214,6 +261,12 @@ struct ProfilePickerView: View {
             }
         }
     }
+
+    private func toggleDetails(for profile: CDPProfile) {
+        withAnimation(.easeOut(duration: 0.16)) {
+            expandedProfileID = expandedProfileID == profile.id ? nil : profile.id
+        }
+    }
 }
 
 struct ProfileRow: View {
@@ -224,114 +277,177 @@ struct ProfileRow: View {
     let isClosing: Bool
     let isDisconnectingMCP: Bool
     let allowsRunningSelection: Bool
+    let isExpanded: Bool
     let onSelect: () -> Void
+    let onToggleDetails: () -> Void
     let onDisconnectMCP: () -> Void
     let onClose: () -> Void
 
+    private var canSelect: Bool {
+        (!isRunning || allowsRunningSelection) && !isOpening && !isClosing && !isDisconnectingMCP
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Text(profile.badgeText)
-                    .font(.system(size: profile.badgeText.count > 1 ? 13 : 16, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(iconForeground)
-            }
-            .frame(width: 34, height: 34)
+        VStack(spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                Button {
+                    guard canSelect else { return }
+                    onSelect()
+                } label: {
+                    HStack(spacing: 12) {
+                        badge
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(profile.name) - porta \(profile.port)")
-                    .font(.body.weight(isRunning ? .semibold : .regular))
-                    .foregroundStyle(.primary)
-
-                if mcpClientCount > 0 {
-                    HStack(spacing: 5) {
-                        Image(systemName: "bolt.horizontal.circle.fill")
-                            .font(.caption)
-                            .symbolRenderingMode(.hierarchical)
-
-                        Text("\(mcpClientCount) MCP ativo\(mcpClientCount == 1 ? "" : "s")")
-                            .font(.caption.weight(.semibold))
-                            .monospacedDigit()
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(profile.name) · porta \(profile.port)")
+                                .font(.body.weight(isRunning ? .semibold : .regular))
+                                .foregroundStyle(PanelTheme.textPrimary)
+                        }
                     }
-                    .foregroundStyle(.orange)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.orange.opacity(0.16)))
                 }
-            }
+                .buttonStyle(.plain)
+                .disabled(!canSelect)
 
-            Spacer()
+                Spacer(minLength: 8)
 
-            if isOpening || isClosing || isDisconnectingMCP {
-                ProgressView()
-                    .controlSize(.small)
-            } else if isRunning {
-                HStack(spacing: 8) {
-                    if mcpClientCount > 0 {
-                        Button(action: onDisconnectMCP) {
-                            Label("Liberar", systemImage: "bolt.slash.fill")
+                if isOpening || isClosing || isDisconnectingMCP {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    HStack(spacing: 8) {
+                        if mcpClientCount > 0 {
+                            Button(action: onDisconnectMCP) {
+                                Image(systemName: "bolt.slash")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(PanelTheme.accent)
+                                    .frame(width: 28, height: 28)
+                                    .background(
+                                        Circle()
+                                            .fill(PanelTheme.accent.opacity(0.12))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .help("Liberar upload desconectando MCP clients de \(profile.name)")
+                        }
+
+                        if isRunning {
+                            Button(action: onClose) {
+                                Image(systemName: "xmark")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(PanelTheme.textMuted)
+                                    .frame(width: 26, height: 26)
+                                    .background(
+                                        Circle()
+                                            .fill(PanelTheme.border.opacity(0.9))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .help("Close \(profile.name)")
+                        }
+
+                        Button(action: onToggleDetails) {
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(.orange)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 5)
-                                .contentShape(Capsule())
+                                .foregroundStyle(PanelTheme.textPrimary)
+                                .frame(width: 26, height: 26)
+                                .background(
+                                    Circle()
+                                        .fill(PanelTheme.border.opacity(0.9))
+                                )
                         }
                         .buttonStyle(.plain)
-                        .background(Capsule().fill(Color.orange.opacity(0.14)))
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(Color.orange.opacity(0.34), lineWidth: 1)
-                        )
-                        .help("Liberar upload desconectando MCP clients de \(profile.name)")
+                        .accessibilityLabel(isExpanded ? "Ocultar detalhes" : "Mostrar detalhes")
                     }
-
-                    ZStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.green)
-                    }
-                    .frame(width: 24, height: 24)
-                    .background(Circle().fill(Color.green.opacity(0.16)))
-
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 24, height: 24)
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .background(Circle().fill(Color.primary.opacity(0.06)))
-                    .help("Close \(profile.name)")
                 }
             }
+
+            if isExpanded {
+                ProfileDetails(
+                    profile: profile,
+                    isRunning: isRunning,
+                    mcpClientCount: mcpClientCount
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isRunning ? Color.white.opacity(0.08) : Color.clear)
+            RoundedRectangle(cornerRadius: PanelTheme.cardRadius)
+                .fill(PanelTheme.card)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(isRunning ? Color.green.opacity(0.7) : Color.clear, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: PanelTheme.cardRadius)
+                        .strokeBorder(
+                            isRunning ? PanelTheme.success.opacity(0.5) : PanelTheme.border,
+                            lineWidth: 1
+                        )
                 )
         )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard (!isRunning || allowsRunningSelection), !isOpening, !isClosing, !isDisconnectingMCP else { return }
-            onSelect()
-        }
-        .disabled(isOpening || isClosing || isDisconnectingMCP)
+        .shadow(color: PanelTheme.shadow.opacity(isExpanded ? 0.18 : 0.1), radius: isExpanded ? 12 : 8, x: 0, y: 6)
+        .animation(.easeOut(duration: 0.15), value: isExpanded)
+    }
+
+    private var badge: some View {
+        Text(profile.badgeText)
+            .font(.system(size: profile.badgeText.count > 1 ? 13 : 16, weight: .bold, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            .frame(width: 32, height: 32)
+            .background(
+                Circle()
+                    .fill(iconForeground)
+            )
     }
 
     private var iconForeground: Color {
         switch profile.kind {
         case .personal:
-            Color(red: 0.0, green: 0.36, blue: 1.0)
+            PanelTheme.badgePersonal
         case .clinic:
-            Color(red: 0.0, green: 0.62, blue: 0.72)
+            PanelTheme.badgeClinic
         case .finance:
-            Color(red: 0.98, green: 0.42, blue: 0.0)
+            PanelTheme.badgeFinance
+        }
+    }
+}
+
+private struct ProfileDetails: View {
+    let profile: CDPProfile
+    let isRunning: Bool
+    let mcpClientCount: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            detailRow(icon: "globe", label: "Default", value: profile.defaultURL ?? "Sem URL padrão")
+            detailRow(icon: "app.badge", label: "App", value: profile.browserAppName)
+            detailRow(
+                icon: "bolt.horizontal",
+                label: "MCP",
+                value: mcpClientCount > 0 ? "\(mcpClientCount) ativo\(mcpClientCount == 1 ? "" : "s")" : "Sem MCP ativos"
+            )
+            detailRow(
+                icon: "power",
+                label: "Status",
+                value: isRunning ? "Rodando" : "Disponível"
+            )
+        }
+        .font(.caption)
+        .foregroundStyle(PanelTheme.textMuted)
+        .padding(.leading, 2)
+        .padding(.top, 2)
+    }
+
+    private func detailRow(icon: String, label: String, value: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(PanelTheme.textMuted)
+                .frame(width: 16)
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(PanelTheme.textPrimary)
+            Text("·")
+                .foregroundStyle(PanelTheme.textMuted)
+            Text(value)
+                .lineLimit(1)
         }
     }
 }
