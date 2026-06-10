@@ -288,7 +288,7 @@ struct ProfileRow: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
                 Button {
                     guard canSelect else { return }
@@ -366,6 +366,7 @@ struct ProfileRow: View {
                     isRunning: isRunning,
                     mcpClientCount: mcpClientCount
                 )
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
