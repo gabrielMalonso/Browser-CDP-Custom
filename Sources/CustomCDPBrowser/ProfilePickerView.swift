@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 private enum PanelTheme {
@@ -21,6 +22,33 @@ private enum PanelTheme {
     static let badgeFinance = Color(red: 0.82, green: 0.38, blue: 0.18)
     static let cardRadius: CGFloat = 12
     static let panelRadius: CGFloat = 14
+    static let scrollbarGutter: CGFloat = 8
+}
+
+private struct ScrollViewAppearanceConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            configure(from: view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            configure(from: nsView)
+        }
+    }
+
+    private func configure(from view: NSView) {
+        guard let scrollView = view.enclosingScrollView else { return }
+
+        scrollView.autohidesScrollers = true
+        scrollView.scrollerStyle = .overlay
+        scrollView.hasVerticalScroller = false
+        scrollView.hasHorizontalScroller = false
+        scrollView.drawsBackground = false
+    }
 }
 
 struct ProfilePickerView: View {
@@ -43,34 +71,35 @@ struct ProfilePickerView: View {
         VStack(spacing: 0) {
             header
 
-        ScrollView {
-            VStack(spacing: 10) {
-                ForEach(CDPProfile.visibleProfiles) { profile in
-                    ProfileRow(
-                        profile: profile,
-                        isRunning: launcher.runningProfileIDs.contains(profile.id),
-                        mcpClientCount: launcher.mcpClientsByProfileID[profile.id]?.count ?? 0,
-                        isOpening: openingProfileID == profile.id,
-                        isClosing: closingProfileID == profile.id,
-                        isDisconnectingMCP: disconnectingMCPProfileID == profile.id,
-                        allowsRunningSelection: hasPendingLinks,
-                        isExpanded: expandedProfileID == profile.id
-                    ) {
-                        select(profile)
-                    } onToggleDetails: {
-                        toggleDetails(for: profile)
-                    } onDisconnectMCP: {
-                        disconnectMCPClients(for: profile)
-                    } onClose: {
-                        close(profile)
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(CDPProfile.visibleProfiles) { profile in
+                        ProfileRow(
+                            profile: profile,
+                            isRunning: launcher.runningProfileIDs.contains(profile.id),
+                            mcpClientCount: launcher.mcpClientsByProfileID[profile.id]?.count ?? 0,
+                            isOpening: openingProfileID == profile.id,
+                            isClosing: closingProfileID == profile.id,
+                            isDisconnectingMCP: disconnectingMCPProfileID == profile.id,
+                            allowsRunningSelection: hasPendingLinks,
+                            isExpanded: expandedProfileID == profile.id
+                        ) {
+                            select(profile)
+                        } onToggleDetails: {
+                            toggleDetails(for: profile)
+                        } onDisconnectMCP: {
+                            disconnectMCPClients(for: profile)
+                        } onClose: {
+                            close(profile)
+                        }
                     }
                 }
+                .padding(.leading, 12)
+                .padding(.trailing, 12 + PanelTheme.scrollbarGutter)
+                .padding(.vertical, 10)
+                .background(ScrollViewAppearanceConfigurator())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .padding(.trailing, 4)
-        }
-        .scrollIndicators(.hidden)
+            .scrollIndicators(.hidden)
 
             footer
         }
