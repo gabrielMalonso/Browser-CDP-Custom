@@ -1,32 +1,233 @@
 import Foundation
 
+struct CDPAttachedClient: Equatable, Hashable {
+    let processID: String
+    let command: String
+}
+
+enum CDPProcessInspector {
+    static func establishedLsofArguments(for port: Int) -> [String] {
+        ["-nP", "-tiTCP:\(port)", "-sTCP:ESTABLISHED"]
+    }
+
+    static func processListArguments() -> [String] {
+        ["-axo", "pid=,command="]
+    }
+
+    static func psCommandArguments(for processID: String) -> [String] {
+        ["-ww", "-p", processID, "-o", "command="]
+    }
+
+    static func uniqueProcessIDs(from output: String) -> [String] {
+        var seen = Set<String>()
+        var processIDs: [String] = []
+
+        for processID in output.split(whereSeparator: \.isNewline).map(String.init) {
+            guard !processID.isEmpty, seen.insert(processID).inserted else { continue }
+            processIDs.append(processID)
+        }
+
+        return processIDs
+    }
+
+    static func isPlaywrightMCPCommand(_ command: String, for port: Int) -> Bool {
+        let tokens = command.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard tokens.contains(where: { $0 == "playwright-mcp" || $0.hasSuffix("/playwright-mcp") }) else {
+            return false
+        }
+
+        let endpoints = [
+            "http://127.0.0.1:\(port)",
+            "http://localhost:\(port)",
+        ]
+
+        for index in tokens.indices where tokens[index] == "--cdp-endpoint" {
+            let nextIndex = tokens.index(after: index)
+            if nextIndex < tokens.endIndex, endpoints.contains(tokens[nextIndex]) {
+                return true
+            }
+        }
+
+        return endpoints.contains { tokens.contains("--cdp-endpoint=\($0)") }
+    }
+
+    static func processCommands(from output: String) -> [String: String] {
+        var commandsByProcessID: [String: String] = [:]
+
+        for line in output.split(whereSeparator: \.isNewline).map(String.init) {
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+            guard let separator = trimmedLine.firstIndex(where: \.isWhitespace) else { continue }
+
+            let processID = String(trimmedLine[..<separator])
+            let command = String(trimmedLine[separator...]).trimmingCharacters(in: .whitespaces)
+            guard !processID.isEmpty, !command.isEmpty else { continue }
+            commandsByProcessID[processID] = command
+        }
+
+        return commandsByProcessID
+    }
+
+    static func clients(from commandsByProcessID: [String: String], port: Int) -> [CDPAttachedClient] {
+        commandsByProcessID
+            .filter { isPlaywrightMCPCommand($0.value, for: port) }
+            .sorted { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
+            .map { CDPAttachedClient(processID: $0.key, command: $0.value) }
+    }
+
+    static func attachedMCPClients(on port: Int) throws -> [CDPAttachedClient] {
+        try clients(from: processCommands(), port: port)
+    }
+
+    static func attachedMCPClientsByPort(_ ports: [Int]) throws -> [Int: [CDPAttachedClient]] {
+        let commands = try processCommands()
+        return Dictionary(uniqueKeysWithValues: ports.map { port in
+            (port, clients(from: commands, port: port))
+        })
+    }
+
+    static func processIDsListening(on port: Int) throws -> [String] {
+        let output = try output(
+            executablePath: "/usr/sbin/lsof",
+            arguments: ["-tiTCP:\(port)", "-sTCP:LISTEN"],
+            emptyStatus: 1,
+            failure: LauncherError.processLookupFailed(port)
+        )
+
+        return uniqueProcessIDs(from: output)
+    }
+
+    static func terminate(processIDs: [String]) throws {
+        guard !processIDs.isEmpty else { return }
+
+        _ = try output(
+            executablePath: "/bin/kill",
+            arguments: processIDs,
+            failure: LauncherError.processTerminationFailed
+        )
+    }
+
+    static func terminateMCPClients(processIDs: [String]) {
+        for processID in processIDs {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/kill")
+            process.arguments = [processID]
+            process.standardError = Pipe()
+            try? process.run()
+            process.waitUntilExit()
+        }
+    }
+
+    private static func processIDsWithEstablishedConnections(on port: Int) throws -> [String] {
+        let output = try output(
+            executablePath: "/usr/sbin/lsof",
+            arguments: establishedLsofArguments(for: port),
+            emptyStatus: 1,
+            failure: LauncherError.mcpClientLookupFailed(port)
+        )
+
+        return uniqueProcessIDs(from: output)
+    }
+
+    private static func processCommands() throws -> [String: String] {
+        let output = try output(
+            executablePath: "/bin/ps",
+            arguments: processListArguments(),
+            failure: LauncherError.mcpClientLookupFailed(nil)
+        )
+
+        return processCommands(from: output)
+    }
+
+    private static func command(forProcessID processID: String) throws -> String? {
+        do {
+            let output = try output(
+                executablePath: "/bin/ps",
+                arguments: psCommandArguments(for: processID),
+                emptyStatus: 1,
+                failure: LauncherError.mcpClientLookupFailed(nil)
+            )
+
+            return output.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch LauncherError.mcpClientLookupFailed {
+            return nil
+        }
+    }
+
+    private static func output(
+        executablePath: String,
+        arguments: [String],
+        emptyStatus: Int? = nil,
+        failure: Error
+    ) throws -> String {
+        let process = Process()
+        let output = Pipe()
+
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = arguments
+        process.standardOutput = output
+        process.standardError = Pipe()
+
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        if let emptyStatus, process.terminationStatus == emptyStatus {
+            return ""
+        }
+
+        guard process.terminationStatus == 0 else {
+            throw failure
+        }
+
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+}
+
 @MainActor
 final class CDPProfileLauncher: ObservableObject {
     static let shared = CDPProfileLauncher()
 
     @Published private(set) var runningProfileIDs: Set<String> = []
+    @Published private(set) var mcpClientsByProfileID: [String: [CDPAttachedClient]] = [:]
 
     private let fileManager = FileManager.default
+    private var refreshGeneration = 0
 
     func refreshStatuses() {
+        refreshGeneration += 1
+        let generation = refreshGeneration
+
         Task {
             var running = Set<String>()
+            var mcpClientsByProfileID: [String: [CDPAttachedClient]] = [:]
+            let mcpClientsByPort = (try? CDPProcessInspector.attachedMCPClientsByPort(
+                CDPProfile.visibleProfiles.map(\.port)
+            )) ?? [:]
 
-            await withTaskGroup(of: (String, Bool).self) { group in
+            await withTaskGroup(of: (String, Bool, [CDPAttachedClient]).self) { group in
                 for profile in CDPProfile.visibleProfiles {
+                    let mcpClients = mcpClientsByPort[profile.port] ?? []
                     group.addTask {
                         let isRunning = await Self.checkEndpoint(profile.endpoint)
-                        return (profile.id, isRunning)
+                        return (profile.id, isRunning, mcpClients)
                     }
                 }
 
-                for await (id, isRunning) in group where isRunning {
-                    running.insert(id)
+                for await (id, isRunning, mcpClients) in group {
+                    if isRunning {
+                        running.insert(id)
+                    }
+
+                    if !mcpClients.isEmpty {
+                        mcpClientsByProfileID[id] = mcpClients
+                    }
                 }
             }
 
             await MainActor.run {
+                guard self.refreshGeneration == generation else { return }
                 self.runningProfileIDs = running
+                self.mcpClientsByProfileID = mcpClientsByProfileID
             }
         }
     }
@@ -83,7 +284,7 @@ final class CDPProfileLauncher: ObservableObject {
     func close(_ profile: CDPProfile, completion: @escaping (Result<Void, Error>) -> Void) {
         Task {
             do {
-                let processIDs = try Self.processIDsListening(on: profile.port)
+                let processIDs = try CDPProcessInspector.processIDsListening(on: profile.port)
                 guard !processIDs.isEmpty else {
                     await MainActor.run {
                         self.refreshStatuses()
@@ -92,7 +293,7 @@ final class CDPProfileLauncher: ObservableObject {
                     return
                 }
 
-                try Self.terminate(processIDs: processIDs)
+                try CDPProcessInspector.terminate(processIDs: processIDs)
                 let didClose = await Self.waitForEndpointToStop(profile.endpoint)
 
                 await MainActor.run {
@@ -105,6 +306,41 @@ final class CDPProfileLauncher: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
+    func disconnectMCPClients(for profile: CDPProfile, completion: @escaping (Result<Int, Error>) -> Void) {
+        Task {
+            do {
+                let clients = try CDPProcessInspector.attachedMCPClients(on: profile.port)
+                guard !clients.isEmpty else {
+                    await MainActor.run {
+                        self.refreshStatuses()
+                        completion(.success(0))
+                    }
+                    return
+                }
+
+                CDPProcessInspector.terminateMCPClients(processIDs: clients.map(\.processID))
+                try? await Task.sleep(for: .milliseconds(200))
+
+                let remainingClients = try CDPProcessInspector.attachedMCPClients(on: profile.port)
+
+                await MainActor.run {
+                    self.refreshStatuses()
+
+                    if remainingClients.isEmpty {
+                        completion(.success(clients.count))
+                    } else {
+                        completion(.failure(LauncherError.mcpClientsStillConnected(profile.port)))
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.refreshStatuses()
                     completion(.failure(error))
                 }
             }
@@ -258,46 +494,6 @@ final class CDPProfileLauncher: ObservableObject {
         }
     }
 
-    private static func processIDsListening(on port: Int) throws -> [String] {
-        let process = Process()
-        let output = Pipe()
-
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        process.arguments = ["-tiTCP:\(port)", "-sTCP:LISTEN"]
-        process.standardOutput = output
-        process.standardError = Pipe()
-
-        try process.run()
-        process.waitUntilExit()
-
-        if process.terminationStatus == 1 {
-            return []
-        }
-
-        guard process.terminationStatus == 0 else {
-            throw LauncherError.processLookupFailed(port)
-        }
-
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8)?
-            .split(whereSeparator: \.isNewline)
-            .map(String.init) ?? []
-    }
-
-    private static func terminate(processIDs: [String]) throws {
-        let process = Process()
-
-        process.executableURL = URL(fileURLWithPath: "/bin/kill")
-        process.arguments = processIDs
-        process.standardError = Pipe()
-
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            throw LauncherError.processTerminationFailed
-        }
-    }
 }
 
 enum LauncherError: LocalizedError {
@@ -306,6 +502,8 @@ enum LauncherError: LocalizedError {
     case openTabFailed(url: URL, port: Int, statusCode: Int?)
     case processLookupFailed(Int)
     case processTerminationFailed
+    case mcpClientLookupFailed(Int?)
+    case mcpClientsStillConnected(Int)
 
     var errorDescription: String? {
         switch self {
@@ -323,6 +521,14 @@ enum LauncherError: LocalizedError {
             "Could not find the browser process on CDP port \(port)."
         case .processTerminationFailed:
             "Could not close the browser process."
+        case .mcpClientLookupFailed(let port):
+            if let port {
+                "Could not inspect MCP clients on CDP port \(port)."
+            } else {
+                "Could not inspect MCP client process details."
+            }
+        case .mcpClientsStillConnected(let port):
+            "Some MCP clients are still connected to CDP port \(port)."
         }
     }
 }

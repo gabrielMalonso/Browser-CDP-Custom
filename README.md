@@ -47,3 +47,9 @@ The **Open links:** setting controls links opened from outside the app:
 | Last Selected | Opens incoming links in the last profile selected from the launcher, falling back to Pessoal. |
 
 When a selected profile is already running, links are opened through its DevTools `/json/new` endpoint. When it is closed, the browser is launched with the incoming URL as the initial page instead of the profile's default URL.
+
+## Disconnect MCP clients
+
+Profile rows show active Playwright MCP clients for that profile's CDP port. The disconnect button only targets processes with a command line matching `playwright-mcp --cdp-endpoint http://127.0.0.1:<port>` or the equivalent `localhost` endpoint.
+
+This does not close Helium or Chrome, does not kill generic `node` processes, and does not affect MCP clients connected to other profile ports.
