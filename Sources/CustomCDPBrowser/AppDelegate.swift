@@ -15,10 +15,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var isShowing = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.register(defaults: [
+            UserDefaultsKeys.mcpAutoCleanupEnabled: true,
+        ])
+
         NSApp.setActivationPolicy(.accessory)
         LinkRouter.shared.onShowOverlay = { [weak self] in
             self?.showPanel()
         }
+        CDPProfileLauncher.shared.configureAutoCleanup()
 
         NSAppleEventManager.shared().setEventHandler(
             self,

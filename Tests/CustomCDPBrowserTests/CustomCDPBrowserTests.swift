@@ -128,6 +128,27 @@ final class CustomCDPBrowserTests: XCTestCase {
         )
     }
 
+    func testMCPProcessCommandFilterIncludesNPMRunnerForMemoryAccounting() {
+        XCTAssertTrue(
+            CDPProcessInspector.isPlaywrightMCPProcessCommand(
+                "npm exec @playwright/mcp@latest --cdp-endpoint http://127.0.0.1:9224",
+                for: 9224
+            )
+        )
+        XCTAssertTrue(
+            CDPProcessInspector.isPlaywrightMCPProcessCommand(
+                "node /usr/local/bin/playwright-mcp --cdp-endpoint http://127.0.0.1:9224",
+                for: 9224
+            )
+        )
+        XCTAssertFalse(
+            CDPProcessInspector.isPlaywrightMCPProcessCommand(
+                "npm exec @playwright/mcp@latest --cdp-endpoint http://127.0.0.1:9223",
+                for: 9224
+            )
+        )
+    }
+
     func testMCPClientsAreFilteredAndSortedByProcessID() {
         let clients = CDPProcessInspector.clients(
             from: [
@@ -140,6 +161,140 @@ final class CustomCDPBrowserTests: XCTestCase {
         )
 
         XCTAssertEqual(clients.map(\.processID), ["123", "234"])
+    }
+
+    func testMCPClientsPreserveResidentMemoryFromProcessSnapshots() {
+        let clients = CDPProcessInspector.clients(
+            from: [
+                CDPProcessInspector.ProcessSnapshot(
+                    processID: "456",
+                    parentProcessID: "100",
+                    residentMemoryKilobytes: 2048,
+                    command: "node playwright-mcp --cdp-endpoint http://127.0.0.1:9223"
+                ),
+                CDPProcessInspector.ProcessSnapshot(
+                    processID: "123",
+                    parentProcessID: "100",
+                    residentMemoryKilobytes: 8192,
+                    command: "node playwright-mcp --cdp-endpoint http://127.0.0.1:9224"
+                ),
+            ],
+            port: 9224
+        )
+
+        XCTAssertEqual(clients, [
+            CDPAttachedClient(
+                processID: "123",
+                command: "node playwright-mcp --cdp-endpoint http://127.0.0.1:9224",
+                residentMemoryKilobytes: 8192
+            )
+        ])
+    }
+
+    func testMCPResidentMemoryIncludesRunnerAndClientProcesses() {
+        let memory = CDPProcessInspector.mcpResidentMemoryKilobytes(
+            from: [
+                CDPProcessInspector.ProcessSnapshot(
+                    processID: "100",
+                    parentProcessID: "1",
+                    residentMemoryKilobytes: 11024,
+                    command: "npm exec @playwright/mcp@latest --cdp-endpoint http://127.0.0.1:9224"
+                ),
+                CDPProcessInspector.ProcessSnapshot(
+                    processID: "101",
+                    parentProcessID: "100",
+                    residentMemoryKilobytes: 8192,
+                    command: "node playwright-mcp --cdp-endpoint http://127.0.0.1:9224"
+                ),
+                CDPProcessInspector.ProcessSnapshot(
+                    processID: "102",
+                    parentProcessID: "200",
+                    residentMemoryKilobytes: 4096,
+                    command: "node playwright-mcp --cdp-endpoint http://127.0.0.1:9223"
+                ),
+            ],
+            ports: [9224]
+        )
+
+        XCTAssertEqual(memory, 19216)
+    }
+
+    func testMCPProcessesIncludePortAndParentProcessID() {
+        let processes = CDPProcessInspector.mcpProcesses(
+            from: [
+                CDPProcessInspector.ProcessSnapshot(
+                    processID: "100",
+                    parentProcessID: "1",
+                    residentMemoryKilobytes: 11024,
+                    command: "npm exec @playwright/mcp@latest --cdp-endpoint http://127.0.0.1:9224"
+                ),
+                CDPProcessInspector.ProcessSnapshot(
+                    processID: "101",
+                    parentProcessID: "100",
+                    residentMemoryKilobytes: 8192,
+                    command: "node playwright-mcp --cdp-endpoint http://127.0.0.1:9224"
+                ),
+            ],
+            ports: [9224]
+        )
+
+        XCTAssertEqual(processes.map(\.processID), ["100", "101"])
+        XCTAssertEqual(processes.map(\.parentProcessID), ["1", "100"])
+        XCTAssertEqual(processes.map(\.port), [9224, 9224])
+    }
+
+    func testIdleMCPProcessesExcludeConnectedClientAndParentRunner() {
+        let processes = [
+            CDPProcessInspector.MCPProcess(
+                processID: "100",
+                parentProcessID: "1",
+                port: 9224,
+                residentMemoryKilobytes: 11024,
+                command: "npm exec @playwright/mcp@latest --cdp-endpoint http://127.0.0.1:9224"
+            ),
+            CDPProcessInspector.MCPProcess(
+                processID: "101",
+                parentProcessID: "100",
+                port: 9224,
+                residentMemoryKilobytes: 8192,
+                command: "node playwright-mcp --cdp-endpoint http://127.0.0.1:9224"
+            ),
+            CDPProcessInspector.MCPProcess(
+                processID: "200",
+                parentProcessID: "1",
+                port: 9225,
+                residentMemoryKilobytes: 11024,
+                command: "npm exec @playwright/mcp@latest --cdp-endpoint http://127.0.0.1:9225"
+            ),
+        ]
+
+        let idleProcesses = CDPProcessInspector.idleMCPProcesses(
+            from: processes,
+            listeningPorts: [9224, 9225],
+            establishedProcessIDsByPort: [9224: ["101"]]
+        )
+
+        XCTAssertEqual(idleProcesses.map(\.processID), ["200"])
+    }
+
+    func testIdleMCPProcessesIncludeProcessesForClosedPorts() {
+        let processes = [
+            CDPProcessInspector.MCPProcess(
+                processID: "100",
+                parentProcessID: "1",
+                port: 9226,
+                residentMemoryKilobytes: 11024,
+                command: "npm exec @playwright/mcp@latest --cdp-endpoint http://127.0.0.1:9226"
+            )
+        ]
+
+        let idleProcesses = CDPProcessInspector.idleMCPProcesses(
+            from: processes,
+            listeningPorts: [],
+            establishedProcessIDsByPort: [:]
+        )
+
+        XCTAssertEqual(idleProcesses.map(\.processID), ["100"])
     }
 
     func testProcessListParsingPreservesCommandsWithSpaces() {
@@ -161,18 +316,39 @@ final class CustomCDPBrowserTests: XCTestCase {
         )
     }
 
+    func testProcessSnapshotParsingPreservesRSSAndCommandsWithSpaces() {
+        let snapshots = CDPProcessInspector.processSnapshots(
+            from: """
+              123 1 8192 node /tmp/playwright-mcp --cdp-endpoint http://127.0.0.1:9224
+              456 1 2048 /Applications/Helium.app/Contents/MacOS/Helium --remote-debugging-port=9224
+
+            """
+        )
+
+        XCTAssertEqual(snapshots, [
+            CDPProcessInspector.ProcessSnapshot(
+                processID: "123",
+                parentProcessID: "1",
+                residentMemoryKilobytes: 8192,
+                command: "node /tmp/playwright-mcp --cdp-endpoint http://127.0.0.1:9224"
+            ),
+            CDPProcessInspector.ProcessSnapshot(
+                processID: "456",
+                parentProcessID: "1",
+                residentMemoryKilobytes: 2048,
+                command: "/Applications/Helium.app/Contents/MacOS/Helium --remote-debugging-port=9224"
+            ),
+        ])
+    }
+
     func testProcessInspectorBuildsSafeSystemToolArguments() {
         XCTAssertEqual(
             CDPProcessInspector.processListArguments(),
-            ["-axo", "pid=,command="]
+            ["-axo", "pid=,ppid=,rss=,command="]
         )
         XCTAssertEqual(
             CDPProcessInspector.establishedLsofArguments(for: 9224),
             ["-nP", "-tiTCP:9224", "-sTCP:ESTABLISHED"]
-        )
-        XCTAssertEqual(
-            CDPProcessInspector.psCommandArguments(for: "123"),
-            ["-ww", "-p", "123", "-o", "command="]
         )
     }
 
