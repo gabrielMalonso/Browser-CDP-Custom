@@ -6,9 +6,12 @@ struct SettingsView: View {
     @State private var currentDefaultBrowserName = DefaultBrowserManager.currentDefaultBrowserName()
     @State private var isSelfDefaultBrowser = DefaultBrowserManager.isSelfDefaultBrowser()
     @State private var isSettingDefaultBrowser = false
+    @State private var isCleaningMCPClients = false
     @State private var defaultBrowserFeedback: String?
+    @State private var mcpCleanupFeedback: String?
     @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
     @AppStorage(UserDefaultsKeys.linkRoutingMode) private var linkRoutingMode = LinkRoutingMode.askEveryTime.rawValue
+    @AppStorage(UserDefaultsKeys.mcpAutoCleanupEnabled) private var mcpAutoCleanupEnabled = true
 
     var body: some View {
         Form {
@@ -30,6 +33,33 @@ struct SettingsView: View {
 
                 KeyboardShortcuts.Recorder("Open Overlay:", name: .toggleOverlay)
                     .padding(.vertical, 4)
+            }
+
+            Section("MCP") {
+                Toggle("Auto-clean idle MCP processes", isOn: $mcpAutoCleanupEnabled)
+                    .onChange(of: mcpAutoCleanupEnabled) { _, _ in
+                        CDPProfileLauncher.shared.configureAutoCleanup()
+                    }
+
+                LabeledContent("Auto-clean rule", value: "Checks every 1 min; idle for 5 min")
+
+                Button {
+                    cleanIdleMCPClients()
+                } label: {
+                    if isCleaningMCPClients {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text("Clean Idle MCPs Now")
+                    }
+                }
+                .disabled(isCleaningMCPClients)
+
+                if let mcpCleanupFeedback {
+                    Text(mcpCleanupFeedback)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Links") {
@@ -69,9 +99,10 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 400, height: 400)
+        .frame(width: 430, height: 500)
         .onAppear {
             refreshDefaultBrowserStatus()
+            CDPProfileLauncher.shared.configureAutoCleanup()
         }
     }
 
@@ -93,6 +124,26 @@ struct SettingsView: View {
                 defaultBrowserFeedback = "Custom CDP Browser is the default browser."
             case .failure(let error):
                 defaultBrowserFeedback = error.localizedDescription
+            }
+        }
+    }
+
+    private func cleanIdleMCPClients() {
+        isCleaningMCPClients = true
+        mcpCleanupFeedback = nil
+
+        CDPProfileLauncher.shared.runAutoCleanupNow { result in
+            isCleaningMCPClients = false
+
+            switch result {
+            case .success(let cleanedCount):
+                if cleanedCount == 0 {
+                    mcpCleanupFeedback = "No idle MCPs were ready to clean."
+                } else {
+                    mcpCleanupFeedback = "Cleaned \(cleanedCount) idle MCP process\(cleanedCount == 1 ? "" : "es")."
+                }
+            case .failure(let error):
+                mcpCleanupFeedback = error.localizedDescription
             }
         }
     }

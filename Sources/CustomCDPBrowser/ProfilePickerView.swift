@@ -160,11 +160,18 @@ struct ProfilePickerView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            if let visibleFeedback = feedback ?? linkRouter.feedback {
-                Text(visibleFeedback)
-                    .font(.caption)
-                    .foregroundStyle(PanelTheme.textMuted)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("MCP RAM · \(mcpMemorySummary)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PanelTheme.textPrimary)
+                    .monospacedDigit()
+
+                if let visibleFeedback = feedback ?? linkRouter.feedback ?? launcher.mcpAutoCleanupFeedback {
+                    Text(visibleFeedback)
+                        .font(.caption2)
+                        .foregroundStyle(PanelTheme.textMuted)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
@@ -172,30 +179,37 @@ struct ProfilePickerView: View {
             Button {
                 launcher.refreshStatuses()
             } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.body)
-                    .foregroundStyle(PanelTheme.textMuted)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        Circle().fill(PanelTheme.border.opacity(0.6))
-                    )
+                footerButtonLabel(title: "Atualizar", icon: "arrow.clockwise")
             }
             .buttonStyle(.plain)
             .help("Atualizar status do CDP")
 
             SettingsLink {
-                Image(systemName: "gearshape")
-                    .font(.body)
-                    .foregroundStyle(PanelTheme.textMuted)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        Circle().fill(PanelTheme.border.opacity(0.6))
-                    )
+                footerButtonLabel(title: "Configurações", icon: "gearshape")
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    private var mcpMemorySummary: String {
+        let bytes = Int64(launcher.mcpResidentMemoryKilobytes) * 1024
+        guard bytes > 0 else { return "0 MB" }
+
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .memory)
+    }
+
+    private func footerButtonLabel(title: String, icon: String) -> some View {
+        Label(title, systemImage: icon)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(PanelTheme.textMuted)
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .frame(height: 28)
+            .background(
+                Capsule().fill(PanelTheme.border.opacity(0.6))
+            )
     }
 
     private var pendingLinkSummary: String {

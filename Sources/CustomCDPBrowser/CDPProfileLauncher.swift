@@ -3,19 +3,49 @@ import Foundation
 struct CDPAttachedClient: Equatable, Hashable {
     let processID: String
     let command: String
+    let residentMemoryKilobytes: Int
+
+    init(processID: String, command: String, residentMemoryKilobytes: Int = 0) {
+        self.processID = processID
+        self.command = command
+        self.residentMemoryKilobytes = residentMemoryKilobytes
+    }
 }
 
 enum CDPProcessInspector {
+    struct ProcessSnapshot: Equatable {
+        let processID: String
+        let parentProcessID: String
+        let residentMemoryKilobytes: Int
+        let command: String
+
+        init(
+            processID: String,
+            parentProcessID: String = "",
+            residentMemoryKilobytes: Int,
+            command: String
+        ) {
+            self.processID = processID
+            self.parentProcessID = parentProcessID
+            self.residentMemoryKilobytes = residentMemoryKilobytes
+            self.command = command
+        }
+    }
+
+    struct MCPProcess: Equatable {
+        let processID: String
+        let parentProcessID: String
+        let port: Int
+        let residentMemoryKilobytes: Int
+        let command: String
+    }
+
     static func establishedLsofArguments(for port: Int) -> [String] {
         ["-nP", "-tiTCP:\(port)", "-sTCP:ESTABLISHED"]
     }
 
     static func processListArguments() -> [String] {
-        ["-axo", "pid=,command="]
-    }
-
-    static func psCommandArguments(for processID: String) -> [String] {
-        ["-ww", "-p", processID, "-o", "command="]
+        ["-axo", "pid=,ppid=,rss=,command="]
     }
 
     static func uniqueProcessIDs(from output: String) -> [String] {
@@ -36,6 +66,19 @@ enum CDPProcessInspector {
             return false
         }
 
+        return hasMatchingCDPEndpoint(in: tokens, for: port)
+    }
+
+    static func isPlaywrightMCPProcessCommand(_ command: String, for port: Int) -> Bool {
+        let tokens = command.split(whereSeparator: \.isWhitespace).map(String.init)
+        let isMCPClient = tokens.contains(where: { $0 == "playwright-mcp" || $0.hasSuffix("/playwright-mcp") })
+        let isMCPRunner = tokens.contains(where: { $0 == "@playwright/mcp" || $0.hasPrefix("@playwright/mcp@") })
+        guard isMCPClient || isMCPRunner else { return false }
+
+        return hasMatchingCDPEndpoint(in: tokens, for: port)
+    }
+
+    private static func hasMatchingCDPEndpoint(in tokens: [String], for port: Int) -> Bool {
         let endpoints = [
             "http://127.0.0.1:\(port)",
             "http://localhost:\(port)",
@@ -67,6 +110,38 @@ enum CDPProcessInspector {
         return commandsByProcessID
     }
 
+    static func processSnapshots(from output: String) -> [ProcessSnapshot] {
+        var snapshots: [ProcessSnapshot] = []
+
+        for line in output.split(whereSeparator: \.isNewline).map(String.init) {
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+            guard let processIDEnd = trimmedLine.firstIndex(where: \.isWhitespace) else { continue }
+
+            let processID = String(trimmedLine[..<processIDEnd])
+            let remainder = trimmedLine[processIDEnd...].trimmingCharacters(in: .whitespaces)
+            guard let parentProcessIDEnd = remainder.firstIndex(where: \.isWhitespace) else { continue }
+
+            let parentProcessID = String(remainder[..<parentProcessIDEnd])
+            let memoryAndCommand = remainder[parentProcessIDEnd...].trimmingCharacters(in: .whitespaces)
+            guard let rssEnd = memoryAndCommand.firstIndex(where: \.isWhitespace) else { continue }
+
+            let rss = Int(memoryAndCommand[..<rssEnd]) ?? 0
+            let command = memoryAndCommand[rssEnd...].trimmingCharacters(in: .whitespaces)
+            guard !processID.isEmpty, !command.isEmpty else { continue }
+
+            snapshots.append(
+                ProcessSnapshot(
+                    processID: processID,
+                    parentProcessID: parentProcessID,
+                    residentMemoryKilobytes: rss,
+                    command: String(command)
+                )
+            )
+        }
+
+        return snapshots
+    }
+
     static func clients(from commandsByProcessID: [String: String], port: Int) -> [CDPAttachedClient] {
         commandsByProcessID
             .filter { isPlaywrightMCPCommand($0.value, for: port) }
@@ -74,15 +149,96 @@ enum CDPProcessInspector {
             .map { CDPAttachedClient(processID: $0.key, command: $0.value) }
     }
 
+    static func clients(from snapshots: [ProcessSnapshot], port: Int) -> [CDPAttachedClient] {
+        snapshots
+            .filter { isPlaywrightMCPCommand($0.command, for: port) }
+            .sorted { $0.processID.localizedStandardCompare($1.processID) == .orderedAscending }
+            .map {
+                CDPAttachedClient(
+                    processID: $0.processID,
+                    command: $0.command,
+                    residentMemoryKilobytes: $0.residentMemoryKilobytes
+                )
+            }
+    }
+
+    static func mcpResidentMemoryKilobytes(from snapshots: [ProcessSnapshot], ports: [Int]) -> Int {
+        mcpProcesses(from: snapshots, ports: ports)
+            .reduce(0) { $0 + $1.residentMemoryKilobytes }
+    }
+
+    static func mcpProcesses(from snapshots: [ProcessSnapshot], ports: [Int]) -> [MCPProcess] {
+        snapshots.flatMap { snapshot in
+            ports.compactMap { port in
+                guard isPlaywrightMCPProcessCommand(snapshot.command, for: port) else { return nil }
+                return MCPProcess(
+                    processID: snapshot.processID,
+                    parentProcessID: snapshot.parentProcessID,
+                    port: port,
+                    residentMemoryKilobytes: snapshot.residentMemoryKilobytes,
+                    command: snapshot.command
+                )
+            }
+        }
+    }
+
+    static func idleMCPProcesses(
+        from processes: [MCPProcess],
+        listeningPorts: Set<Int>,
+        establishedProcessIDsByPort: [Int: Set<String>]
+    ) -> [MCPProcess] {
+        processes.filter { process in
+            guard listeningPorts.contains(process.port) else { return true }
+
+            let establishedProcessIDs = establishedProcessIDsByPort[process.port] ?? []
+            let hasEstablishedConnection = establishedProcessIDs.contains(process.processID)
+            let hasEstablishedChild = processes.contains { candidate in
+                candidate.parentProcessID == process.processID
+                    && candidate.port == process.port
+                    && establishedProcessIDs.contains(candidate.processID)
+            }
+
+            return !hasEstablishedConnection && !hasEstablishedChild
+        }
+    }
+
     static func attachedMCPClients(on port: Int) throws -> [CDPAttachedClient] {
-        try clients(from: processCommands(), port: port)
+        try clients(from: processSnapshots(), port: port)
     }
 
     static func attachedMCPClientsByPort(_ ports: [Int]) throws -> [Int: [CDPAttachedClient]] {
-        let commands = try processCommands()
+        let snapshots = try processSnapshots()
         return Dictionary(uniqueKeysWithValues: ports.map { port in
-            (port, clients(from: commands, port: port))
+            (port, clients(from: snapshots, port: port))
         })
+    }
+
+    static func mcpResidentMemoryKilobytes(on ports: [Int]) throws -> Int {
+        try mcpResidentMemoryKilobytes(from: processSnapshots(), ports: ports)
+    }
+
+    static func mcpProcesses(on ports: [Int]) throws -> [MCPProcess] {
+        try mcpProcesses(from: processSnapshots(), ports: ports)
+    }
+
+    static func idleMCPProcesses(on ports: [Int]) throws -> [MCPProcess] {
+        let snapshots = try processSnapshots()
+        let processes = mcpProcesses(from: snapshots, ports: ports)
+        var listeningPorts = Set<Int>()
+        var establishedProcessIDsByPort: [Int: Set<String>] = [:]
+
+        for port in ports {
+            if !(try processIDsListening(on: port)).isEmpty {
+                listeningPorts.insert(port)
+            }
+            establishedProcessIDsByPort[port] = Set(try processIDsWithEstablishedConnections(on: port))
+        }
+
+        return idleMCPProcesses(
+            from: processes,
+            listeningPorts: listeningPorts,
+            establishedProcessIDsByPort: establishedProcessIDsByPort
+        )
     }
 
     static func processIDsListening(on port: Int) throws -> [String] {
@@ -128,29 +284,14 @@ enum CDPProcessInspector {
         return uniqueProcessIDs(from: output)
     }
 
-    private static func processCommands() throws -> [String: String] {
+    private static func processSnapshots() throws -> [ProcessSnapshot] {
         let output = try output(
             executablePath: "/bin/ps",
             arguments: processListArguments(),
             failure: LauncherError.mcpClientLookupFailed(nil)
         )
 
-        return processCommands(from: output)
-    }
-
-    private static func command(forProcessID processID: String) throws -> String? {
-        do {
-            let output = try output(
-                executablePath: "/bin/ps",
-                arguments: psCommandArguments(for: processID),
-                emptyStatus: 1,
-                failure: LauncherError.mcpClientLookupFailed(nil)
-            )
-
-            return output.trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch LauncherError.mcpClientLookupFailed {
-            return nil
-        }
+        return processSnapshots(from: output)
     }
 
     private static func output(
@@ -186,12 +327,18 @@ enum CDPProcessInspector {
 @MainActor
 final class CDPProfileLauncher: ObservableObject {
     static let shared = CDPProfileLauncher()
+    static let mcpAutoCleanupIntervalSeconds: TimeInterval = 60
+    static let mcpAutoCleanupMinimumIdleSeconds: TimeInterval = 300
 
     @Published private(set) var runningProfileIDs: Set<String> = []
     @Published private(set) var mcpClientsByProfileID: [String: [CDPAttachedClient]] = [:]
+    @Published private(set) var mcpResidentMemoryKilobytes = 0
+    @Published private(set) var mcpAutoCleanupFeedback: String?
 
     private let fileManager = FileManager.default
     private var refreshGeneration = 0
+    private var autoCleanupTask: Task<Void, Never>?
+    private var idleMCPFirstSeenAtByProcessID: [String: Date] = [:]
 
     func refreshStatuses() {
         refreshGeneration += 1
@@ -200,9 +347,11 @@ final class CDPProfileLauncher: ObservableObject {
         Task {
             var running = Set<String>()
             var mcpClientsByProfileID: [String: [CDPAttachedClient]] = [:]
-            let mcpClientsByPort = (try? CDPProcessInspector.attachedMCPClientsByPort(
-                CDPProfile.visibleProfiles.map(\.port)
-            )) ?? [:]
+            let visiblePorts = CDPProfile.visibleProfiles.map(\.port)
+            let mcpClientsByPort = (try? CDPProcessInspector.attachedMCPClientsByPort(visiblePorts)) ?? [:]
+            let mcpResidentMemoryKilobytes = (try? CDPProcessInspector.mcpResidentMemoryKilobytes(
+                on: visiblePorts
+            )) ?? 0
 
             await withTaskGroup(of: (String, Bool, [CDPAttachedClient]).self) { group in
                 for profile in CDPProfile.visibleProfiles {
@@ -228,6 +377,7 @@ final class CDPProfileLauncher: ObservableObject {
                 guard self.refreshGeneration == generation else { return }
                 self.runningProfileIDs = running
                 self.mcpClientsByProfileID = mcpClientsByProfileID
+                self.mcpResidentMemoryKilobytes = mcpResidentMemoryKilobytes
             }
         }
     }
@@ -315,8 +465,8 @@ final class CDPProfileLauncher: ObservableObject {
     func disconnectMCPClients(for profile: CDPProfile, completion: @escaping (Result<Int, Error>) -> Void) {
         Task {
             do {
-                let clients = try CDPProcessInspector.attachedMCPClients(on: profile.port)
-                guard !clients.isEmpty else {
+                let processes = try CDPProcessInspector.mcpProcesses(on: [profile.port])
+                guard !processes.isEmpty else {
                     await MainActor.run {
                         self.refreshStatuses()
                         completion(.success(0))
@@ -324,16 +474,16 @@ final class CDPProfileLauncher: ObservableObject {
                     return
                 }
 
-                CDPProcessInspector.terminateMCPClients(processIDs: clients.map(\.processID))
+                CDPProcessInspector.terminateMCPClients(processIDs: processes.map(\.processID))
                 try? await Task.sleep(for: .milliseconds(200))
 
-                let remainingClients = try CDPProcessInspector.attachedMCPClients(on: profile.port)
+                let remainingProcesses = try CDPProcessInspector.mcpProcesses(on: [profile.port])
 
                 await MainActor.run {
                     self.refreshStatuses()
 
-                    if remainingClients.isEmpty {
-                        completion(.success(clients.count))
+                    if remainingProcesses.isEmpty {
+                        completion(.success(processes.count))
                     } else {
                         completion(.failure(LauncherError.mcpClientsStillConnected(profile.port)))
                     }
@@ -345,6 +495,90 @@ final class CDPProfileLauncher: ObservableObject {
                 }
             }
         }
+    }
+
+    func configureAutoCleanup() {
+        let defaultEnabled = UserDefaults.standard.object(forKey: UserDefaultsKeys.mcpAutoCleanupEnabled) as? Bool ?? true
+
+        if defaultEnabled {
+            startAutoCleanup()
+        } else {
+            stopAutoCleanup()
+        }
+    }
+
+    func runAutoCleanupNow(completion: ((Result<Int, Error>) -> Void)? = nil) {
+        Task {
+            do {
+                let cleanedCount = try await runAutoCleanupCycle(now: Date(), cleanImmediately: true)
+                completion?(.success(cleanedCount))
+            } catch {
+                completion?(.failure(error))
+            }
+        }
+    }
+
+    private func startAutoCleanup() {
+        guard autoCleanupTask == nil else { return }
+
+        autoCleanupTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    _ = try await self?.runAutoCleanupCycle(now: Date(), cleanImmediately: false)
+                } catch {
+                    await MainActor.run {
+                        self?.mcpAutoCleanupFeedback = "Falha ao limpar MCPs ociosos"
+                    }
+                }
+
+                try? await Task.sleep(for: .seconds(Int(Self.mcpAutoCleanupIntervalSeconds)))
+            }
+        }
+    }
+
+    private func stopAutoCleanup() {
+        autoCleanupTask?.cancel()
+        autoCleanupTask = nil
+        idleMCPFirstSeenAtByProcessID = [:]
+    }
+
+    private func runAutoCleanupCycle(now: Date, cleanImmediately: Bool) async throws -> Int {
+        let visiblePorts = CDPProfile.visibleProfiles.map(\.port)
+        let idleProcesses = try CDPProcessInspector.idleMCPProcesses(on: visiblePorts)
+        let idleProcessIDs = Set(idleProcesses.map(\.processID))
+
+        idleMCPFirstSeenAtByProcessID = idleMCPFirstSeenAtByProcessID.filter { idleProcessIDs.contains($0.key) }
+
+        for process in idleProcesses where idleMCPFirstSeenAtByProcessID[process.processID] == nil {
+            idleMCPFirstSeenAtByProcessID[process.processID] = now
+        }
+
+        let expiredProcesses = idleProcesses.filter { process in
+            if cleanImmediately {
+                return true
+            }
+            guard let firstSeenAt = idleMCPFirstSeenAtByProcessID[process.processID] else { return false }
+            return now.timeIntervalSince(firstSeenAt) >= Self.mcpAutoCleanupMinimumIdleSeconds
+        }
+        let expiredProcessIDs = Array(Set(expiredProcesses.map(\.processID))).sorted {
+            $0.localizedStandardCompare($1) == .orderedAscending
+        }
+
+        guard !expiredProcessIDs.isEmpty else {
+            refreshStatuses()
+            return 0
+        }
+
+        CDPProcessInspector.terminateMCPClients(processIDs: expiredProcessIDs)
+        try? await Task.sleep(for: .milliseconds(200))
+
+        for processID in expiredProcessIDs {
+            idleMCPFirstSeenAtByProcessID.removeValue(forKey: processID)
+        }
+
+        refreshStatuses()
+        mcpAutoCleanupFeedback = "Auto-limpeza liberou \(expiredProcessIDs.count) MCP\(expiredProcessIDs.count == 1 ? "" : "s") ocioso\(expiredProcessIDs.count == 1 ? "" : "s")"
+        return expiredProcessIDs.count
     }
 
     private func cleanLocks(for profile: CDPProfile) {
