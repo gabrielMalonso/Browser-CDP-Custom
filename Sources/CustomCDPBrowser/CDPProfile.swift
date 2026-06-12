@@ -55,6 +55,8 @@ struct CDPProfile: Identifiable, Hashable {
             "SP"
         case "financeiro-rossoni":
             "F"
+        case "financeiro-centralsp":
+            "SP"
         case "pessoal":
             "P"
         default:
@@ -96,23 +98,13 @@ struct CDPProfile: Identifiable, Hashable {
             kind: .clinic
         ),
         CDPProfile(
-            id: "central-sp",
-            name: "Central SP",
-            profileRoot: "~/.chrome-cdp/central-sp",
-            profileDirectory: "Default",
+            id: "financeiro-centralsp",
+            name: "Financeiro/CentralSP",
+            profileRoot: "~/.chrome-cdp/financeiro-centralsp-helium",
+            profileDirectory: "Profile 1",
             browserAppName: "Helium",
-            port: 9225,
-            defaultURL: "https://web.whatsapp.com/",
-            kind: .clinic
-        ),
-        CDPProfile(
-            id: "financeiro-rossoni",
-            name: "Financeiro Rossoni",
-            profileRoot: "~/.chrome-cdp/financeiro-rossoni",
-            profileDirectory: "Profile 12",
-            browserAppName: "Google Chrome",
             port: 9226,
-            defaultURL: "https://mail.google.com/mail/u/0/#inbox",
+            defaultURL: "https://web.whatsapp.com/",
             kind: .finance
         ),
     ]
@@ -122,10 +114,16 @@ struct CDPProfile: Identifiable, Hashable {
     }
 
     static func profile(withID id: String?) -> CDPProfile {
-        guard let id, let profile = visibleProfiles.first(where: { $0.id == id }) else {
+        guard let id else {
             return defaultProfile
         }
 
-        return profile
+        let normalizedID = legacyProfileIDAliases[id] ?? id
+        return visibleProfiles.first { $0.id == normalizedID } ?? defaultProfile
     }
+
+    private static let legacyProfileIDAliases = [
+        "central-sp": "financeiro-centralsp",
+        "financeiro-rossoni": "financeiro-centralsp",
+    ]
 }

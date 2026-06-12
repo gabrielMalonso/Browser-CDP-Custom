@@ -14,8 +14,7 @@ final class CustomCDPBrowserTests: XCTestCase {
                 "pessoal",
                 "central-es",
                 "central-rj",
-                "central-sp",
-                "financeiro-rossoni",
+                "financeiro-centralsp",
             ]
         )
     }
@@ -29,6 +28,11 @@ final class CustomCDPBrowserTests: XCTestCase {
         XCTAssertEqual(CDPProfile.profile(withID: "central-rj").id, "central-rj")
         XCTAssertEqual(CDPProfile.profile(withID: "missing").id, "pessoal")
         XCTAssertEqual(CDPProfile.profile(withID: nil).id, "pessoal")
+    }
+
+    func testLegacyUnifiedProfileIDsResolveToFinanceiroCentralSP() {
+        XCTAssertEqual(CDPProfile.profile(withID: "central-sp").id, "financeiro-centralsp")
+        XCTAssertEqual(CDPProfile.profile(withID: "financeiro-rossoni").id, "financeiro-centralsp")
     }
 
     func testProfilesUseDownloadsAsManualDownloadDirectory() {
@@ -80,6 +84,27 @@ final class CustomCDPBrowserTests: XCTestCase {
         XCTAssertEqual(endpoint.port, 9224)
         XCTAssertEqual(endpoint.path, "/json/new")
         XCTAssertEqual(encodedURL?.removingPercentEncoding, url.absoluteString)
+    }
+
+    @MainActor
+    func testStartupURLUsesInitialURLBeforeProfileDefault() {
+        let profile = CDPProfile.profile(withID: "financeiro-centralsp")
+        let initialURL = URL(string: "https://example.com/received-link")!
+
+        XCTAssertEqual(
+            CDPProfileLauncher.startupURL(for: profile, initialURL: initialURL),
+            initialURL
+        )
+    }
+
+    @MainActor
+    func testStartupURLFallsBackToProfileDefault() {
+        let profile = CDPProfile.profile(withID: "financeiro-centralsp")
+
+        XCTAssertEqual(
+            CDPProfileLauncher.startupURL(for: profile, initialURL: nil)?.absoluteString,
+            "https://web.whatsapp.com/"
+        )
     }
 
     func testLsofProcessIDParsingDeduplicatesInStableOrder() {

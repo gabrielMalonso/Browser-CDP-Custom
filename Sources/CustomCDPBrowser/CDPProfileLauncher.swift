@@ -389,17 +389,36 @@ final class CDPProfileLauncher: ObservableObject {
     func ensureRunning(_ profile: CDPProfile, initialURL: URL?, completion: @escaping (Result<Void, Error>) -> Void) {
         do {
             cleanLocks(for: profile)
-            try launchBrowser(for: profile, initialURL: initialURL)
+            try launchBrowser(for: profile)
 
             Task {
                 let ok = await Self.waitForEndpoint(profile.endpoint)
-                await MainActor.run {
-                    self.refreshStatuses()
-                    if ok {
-                        completion(.success(()))
-                    } else {
+                guard ok else {
+                    await MainActor.run {
+                        self.refreshStatuses()
                         completion(.failure(LauncherError.endpointDidNotRespond(profile.port)))
                     }
+                    return
+                }
+
+                await MainActor.run {
+                    self.refreshStatuses()
+                }
+
+                if let startupURL = Self.startupURL(for: profile, initialURL: initialURL) {
+                    do {
+                        try await Self.openNewTab(startupURL, port: profile.port)
+                    } catch {
+                        await MainActor.run {
+                            completion(.failure(error))
+                        }
+                        return
+                    }
+                }
+
+                await MainActor.run {
+                    self.refreshStatuses()
+                    completion(.success(()))
                 }
             }
         } catch {
@@ -596,13 +615,13 @@ final class CDPProfileLauncher: ObservableObject {
         }
     }
 
-    private func launchBrowser(for profile: CDPProfile, initialURL: URL?) throws {
+    private func launchBrowser(for profile: CDPProfile) throws {
         try ensureDownloadPreferences(for: profile)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
 
-        var arguments = [
+        let arguments = [
             "-na", profile.browserAppName,
             "--args",
             "--user-data-dir=\(profile.expandedProfileRoot)",
@@ -613,14 +632,12 @@ final class CDPProfileLauncher: ObservableObject {
             "--disable-features=DevToolsDebuggingRestrictions",
         ]
 
-        if let initialURL {
-            arguments.append(initialURL.absoluteString)
-        } else if let defaultURL = profile.defaultURL {
-            arguments.append(defaultURL)
-        }
-
         process.arguments = arguments
         try process.run()
+    }
+
+    static func startupURL(for profile: CDPProfile, initialURL: URL?) -> URL? {
+        initialURL ?? profile.defaultURL.flatMap(URL.init(string:))
     }
 
     private func ensureDownloadPreferences(for profile: CDPProfile) throws {

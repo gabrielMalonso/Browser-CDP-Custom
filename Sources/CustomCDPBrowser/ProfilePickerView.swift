@@ -333,22 +333,15 @@ struct ProfileRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
-                Button {
-                    guard canSelect else { return }
-                    onSelect()
-                } label: {
-                    HStack(spacing: 12) {
-                        badge
+                HStack(spacing: 12) {
+                    badge
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(profile.name) · porta \(profile.port)")
-                                .font(.body.weight(isRunning ? .semibold : .regular))
-                                .foregroundStyle(PanelTheme.textPrimary)
-                        }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(profile.name) · porta \(profile.port)")
+                            .font(.body.weight(isRunning ? .semibold : .regular))
+                            .foregroundStyle(PanelTheme.textPrimary)
                     }
                 }
-                .buttonStyle(.plain)
-                .disabled(!canSelect)
 
                 Spacer(minLength: 8)
 
@@ -426,6 +419,11 @@ struct ProfileRow: View {
                 )
         )
         .shadow(color: PanelTheme.shadow.opacity(isExpanded ? 0.18 : 0.1), radius: isExpanded ? 12 : 8, x: 0, y: 6)
+        .contentShape(RoundedRectangle(cornerRadius: PanelTheme.cardRadius))
+        .onTapGesture {
+            guard canSelect else { return }
+            onSelect()
+        }
         .animation(.easeOut(duration: 0.15), value: isExpanded)
     }
 

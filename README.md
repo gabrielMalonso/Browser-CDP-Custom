@@ -9,8 +9,7 @@ Small macOS launcher for Gabriel's persistent Helium CDP profiles.
 | Pessoal | Helium | `~/.chrome-cdp/pessoal` | `Default` | `9224` | none |
 | Central ES | Helium | `~/.chrome-cdp/central-es` | `Default` | `9222` | WhatsApp Web |
 | Central RJ | Helium | `~/.chrome-cdp/central-rj` | `Default` | `9223` | WhatsApp Web |
-| Central SP | Helium | `~/.chrome-cdp/central-sp` | `Default` | `9225` | WhatsApp Web |
-| Financeiro Rossoni | Google Chrome | `~/.chrome-cdp/financeiro-rossoni` | `Profile 12` | `9226` | Gmail inbox |
+| Financeiro/CentralSP | Helium | `~/.chrome-cdp/financeiro-centralsp-helium` | `Profile 1` | `9226` | WhatsApp Web |
 
 ## Development
 
@@ -46,7 +45,7 @@ The **Open links:** setting controls links opened from outside the app:
 | Pessoal | Opens incoming links directly in the Pessoal CDP profile. |
 | Last Selected | Opens incoming links in the last profile selected from the launcher, falling back to Pessoal. |
 
-When a selected profile is already running, links are opened through its DevTools `/json/new` endpoint. When it is closed, the browser is launched with the incoming URL as the initial page instead of the profile's default URL.
+When a selected profile is already running, links are opened through its DevTools `/json/new` endpoint. When it is closed, the browser is launched without an initial URL, waits for CDP to respond, then opens the incoming URL through `/json/new` instead of the profile's default URL.
 
 ## Disconnect MCP clients
 
