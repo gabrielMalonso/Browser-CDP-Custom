@@ -1,0 +1,22 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Xcode / Apple build output
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.dSYM/
+*.xctest/
+
+# Packaged artifacts
+*.app/
+*.dmg
+
+# macOS metadata
+.DS_Store
+
+# Local automation/tooling state
+.Codex/
+.playwright-mcp/
+.t3code/
