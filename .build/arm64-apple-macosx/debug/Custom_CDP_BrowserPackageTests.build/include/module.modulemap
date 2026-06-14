@@ -1,3 +1,0 @@
-module Custom_CDP_BrowserPackageTests {
-    header "/Volumes/SSD1TB/Projetos/Custom-CDP-Browser/.build/arm64-apple-macosx/debug/Custom_CDP_BrowserPackageTests.build/include/Custom-CDP-BrowserPackageTests-Swift.h"
-}
