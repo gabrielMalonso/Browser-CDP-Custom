@@ -11,7 +11,7 @@ struct SettingsView: View {
     @State private var mcpCleanupFeedback: String?
     @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
     @AppStorage(UserDefaultsKeys.linkRoutingMode) private var linkRoutingMode = LinkRoutingMode.askEveryTime.rawValue
-    @AppStorage(UserDefaultsKeys.mcpAutoCleanupEnabled) private var mcpAutoCleanupEnabled = true
+    @AppStorage(UserDefaultsKeys.mcpAutoCleanupEnabled) private var mcpAutoCleanupEnabled = false
 
     var body: some View {
         Form {
@@ -41,7 +41,7 @@ struct SettingsView: View {
                         CDPProfileLauncher.shared.configureAutoCleanup()
                     }
 
-                LabeledContent("Auto-clean rule", value: "Checks every 1 min; idle for 5 min")
+                LabeledContent("Auto-clean rule", value: "Off by default; killing Codex MCPs closes their transport")
 
                 Button {
                     cleanIdleMCPClients()

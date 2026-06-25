@@ -517,7 +517,7 @@ final class CDPProfileLauncher: ObservableObject {
     }
 
     func configureAutoCleanup() {
-        let defaultEnabled = UserDefaults.standard.object(forKey: UserDefaultsKeys.mcpAutoCleanupEnabled) as? Bool ?? true
+        let defaultEnabled = UserDefaults.standard.object(forKey: UserDefaultsKeys.mcpAutoCleanupEnabled) as? Bool ?? false
 
         if defaultEnabled {
             startAutoCleanup()
