@@ -336,6 +336,7 @@ final class CDPProfileLauncher: ObservableObject {
     @Published private(set) var mcpAutoCleanupFeedback: String?
 
     private let fileManager = FileManager.default
+    private let mcpGatewayClient = MCPGatewayClient()
     private var refreshGeneration = 0
     private var autoCleanupTask: Task<Void, Never>?
     private var idleMCPFirstSeenAtByProcessID: [String: Date] = [:]
@@ -484,6 +485,15 @@ final class CDPProfileLauncher: ObservableObject {
     func disconnectMCPClients(for profile: CDPProfile, completion: @escaping (Result<Int, Error>) -> Void) {
         Task {
             do {
+                if await mcpGatewayClient.isHealthy() {
+                    let released = try await mcpGatewayClient.release(profile: profile)
+                    await MainActor.run {
+                        self.refreshStatuses()
+                        completion(.success(released ? 1 : 0))
+                    }
+                    return
+                }
+
                 let processes = try CDPProcessInspector.mcpProcesses(on: [profile.port])
                 guard !processes.isEmpty else {
                     await MainActor.run {
@@ -529,6 +539,19 @@ final class CDPProfileLauncher: ObservableObject {
     func runAutoCleanupNow(completion: ((Result<Int, Error>) -> Void)? = nil) {
         Task {
             do {
+                if await mcpGatewayClient.isHealthy() {
+                    var releasedCount = 0
+                    for profile in CDPProfile.visibleProfiles {
+                        if try await mcpGatewayClient.release(profile: profile) {
+                            releasedCount += 1
+                        }
+                    }
+                    refreshStatuses()
+                    mcpAutoCleanupFeedback = "Workers liberados com segurança pelo gateway."
+                    completion?(.success(releasedCount))
+                    return
+                }
+
                 let cleanedCount = try await runAutoCleanupCycle(now: Date(), cleanImmediately: true)
                 completion?(.success(cleanedCount))
             } catch {
@@ -562,6 +585,12 @@ final class CDPProfileLauncher: ObservableObject {
     }
 
     private func runAutoCleanupCycle(now: Date, cleanImmediately: Bool) async throws -> Int {
+        if await mcpGatewayClient.isHealthy() {
+            mcpAutoCleanupFeedback = "Gateway MCP ativo; workers ociosos são liberados pelo daemon."
+            refreshStatuses()
+            return 0
+        }
+
         let visiblePorts = CDPProfile.visibleProfiles.map(\.port)
         let idleProcesses = try CDPProcessInspector.idleMCPProcesses(on: visiblePorts)
         let idleProcessIDs = Set(idleProcesses.map(\.processID))

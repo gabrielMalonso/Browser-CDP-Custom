@@ -287,7 +287,7 @@ struct ProfilePickerView: View {
 
     private func disconnectMCPClients(for profile: CDPProfile) {
         disconnectingMCPProfileID = profile.id
-        feedback = "Disconnecting MCP clients from \(profile.name)..."
+        feedback = "Liberando worker MCP de \(profile.name)..."
 
         launcher.disconnectMCPClients(for: profile) { result in
             disconnectingMCPProfileID = nil
@@ -295,9 +295,9 @@ struct ProfilePickerView: View {
             switch result {
             case .success(let disconnectedCount):
                 if disconnectedCount == 0 {
-                    feedback = "No MCP clients connected to \(profile.name)"
+                    feedback = "Nenhum worker MCP ativo em \(profile.name)"
                 } else {
-                    feedback = "Disconnected \(disconnectedCount) MCP client\(disconnectedCount == 1 ? "" : "s") from \(profile.name)"
+                    feedback = "Worker MCP de \(profile.name) liberado com segurança"
                 }
             case .failure(let error):
                 feedback = error.localizedDescription
@@ -362,7 +362,7 @@ struct ProfileRow: View {
                                     )
                             }
                             .buttonStyle(.plain)
-                            .help("Liberar upload desconectando MCP clients de \(profile.name)")
+                            .help("Liberar worker MCP de \(profile.name)")
                         }
 
                         if isRunning {
@@ -463,7 +463,7 @@ private struct ProfileDetails: View {
             detailRow(
                 icon: "bolt.horizontal",
                 label: "MCP",
-                value: mcpClientCount > 0 ? "\(mcpClientCount) ativo\(mcpClientCount == 1 ? "" : "s")" : "Sem MCP ativos"
+                value: mcpClientCount > 0 ? "\(mcpClientCount) ativo\(mcpClientCount == 1 ? "" : "s")" : "Sem workers ativos"
             )
             detailRow(
                 icon: "power",
