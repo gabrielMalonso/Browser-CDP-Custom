@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plano Visual - Gateway MCP/CDP</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050505;
+      --panel: #0d0c0b;
+      --panel-2: #15130f;
+      --ink: #f3eee3;
+      --muted: #aaa196;
+      --soft: #786f63;
+      --line: #2b2721;
+      --line-strong: #4a4034;
+      --gold: #e7cc8f;
+      --gold-soft: rgba(231, 204, 143, .10);
+      --green: #79d69a;
+      --red: #ff7373;
+      --blue: #8ebcff;
+      --shadow: 0 24px 70px rgba(0, 0, 0, .42);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(231, 204, 143, .10), transparent 30rem),
+        linear-gradient(180deg, #080807 0%, var(--bg) 28rem);
+      color: var(--ink);
+      font: 15px/1.58 "Aptos", "Avenir Next", "SF Pro Text", "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    main {
+      width: min(1040px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 40px 0 64px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      max-width: 920px;
+      color: var(--gold);
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-top: 42px;
+      margin-bottom: 14px;
+      font-size: 24px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      font-size: 17px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    p { color: var(--muted); }
+
+    code {
+      color: var(--gold);
+      font: 13px "SF Mono", Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .hero {
+      display: grid;
+      gap: 22px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(21, 19, 15, .96), rgba(13, 12, 11, .96));
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--soft);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+
+    .meta span:not(:last-child)::after {
+      content: "/";
+      margin-left: 8px;
+      color: var(--line-strong);
+    }
+
+    .summary {
+      max-width: 850px;
+      font-size: 17px;
+    }
+
+    .decision {
+      border-left: 3px solid var(--gold);
+      border-radius: 8px;
+      background: var(--gold-soft);
+      padding: 16px 18px;
+      color: var(--ink);
+    }
+
+    .decision strong { color: var(--gold); }
+
+    .change-list,
+    .risk-list,
+    .accept-list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .change,
+    .risk,
+    .accept {
+      display: grid;
+      grid-template-columns: 160px minmax(0, 1fr);
+      gap: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(13, 12, 11, .78);
+      padding: 14px;
+    }
+
+    .label {
+      color: var(--gold);
+      font-weight: 750;
+    }
+
+    .text {
+      color: var(--muted);
+    }
+
+    .map {
+      display: grid;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(8, 7, 6, .72);
+      padding: 16px;
+    }
+
+    .wave {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr) minmax(180px, .55fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .wave + .wave {
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+
+    .step {
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(231, 204, 143, .42);
+      border-radius: 999px;
+      color: var(--gold);
+      background: rgba(231, 204, 143, .08);
+      font-size: 12px;
+      font-weight: 800;
+      min-height: 34px;
+      text-transform: uppercase;
+    }
+
+    .wave-body,
+    .wave-outcome {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px;
+    }
+
+    .wave-outcome {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .deliverables {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .deliverables li {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(13, 12, 11, .78);
+      padding: 13px 14px;
+      color: var(--muted);
+    }
+
+    .deliverables strong {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 3px;
+    }
+
+    .risk {
+      grid-template-columns: 92px minmax(0, 1fr);
+    }
+
+    .risk.high .label { color: var(--red); }
+    .risk.medium .label { color: var(--gold); }
+    .risk.low .label { color: var(--blue); }
+
+    .accept {
+      grid-template-columns: 34px minmax(0, 1fr);
+    }
+
+    .num {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: 1px solid rgba(231, 204, 143, .42);
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .review {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+    }
+
+    .approval {
+      border: 1px solid rgba(231, 204, 143, .45);
+      border-radius: 10px;
+      background: linear-gradient(180deg, rgba(231, 204, 143, .11), rgba(13, 12, 11, .82));
+      padding: 18px;
+    }
+
+    .approval p {
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    @media (max-width: 760px) {
+      main {
+        width: min(100% - 28px, 1040px);
+        padding: 24px 0 48px;
+      }
+
+      .hero { padding: 22px; }
+      h1 { font-size: 34px; }
+      h2 { margin-top: 34px; }
+
+      .change,
+      .risk,
+      .accept,
+      .wave {
+        grid-template-columns: 1fr;
+      }
+
+      .deliverables {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      body { background: #050505; }
+      .hero, .change, .risk, .accept, .wave-body, .wave-outcome, .review, .approval {
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div class="meta">
+        <span>Aguardando aprovação</span>
+        <span>MCP / CDP / Codex</span>
+        <span>2026-06-25</span>
+      </div>
+      <h1>Gateway MCP para os navegadores CDP</h1>
+      <p class="summary">Trocar quatro MCPs Playwright pesados por um daemon local leve, com workers recriáveis por perfil. A ponte do Codex fica viva; a memória pesada pode dormir.</p>
+      <div class="decision">
+        <strong>Decisão:</strong> implementar primeiro um gateway HTTP com aliases compatíveis para os nomes atuais. Só depois migrar as skills para um namespace único <code>gabriel-browsers</code>.
+      </div>
+    </section>
+
+    <h2>O Que Muda</h2>
+    <ul class="change-list">
+      <li class="change">
+        <span class="label">Antes</span>
+        <span class="text">Cada perfil usa seu próprio <code>@playwright/mcp</code>. Matar esse processo libera RAM, mas corta o transporte da thread e causa <code>Transport closed</code>.</span>
+      </li>
+      <li class="change">
+        <span class="label">Depois</span>
+        <span class="text">Um daemon local fica vivo. Ele cria workers por perfil quando alguma ferramenta é chamada e mata apenas esses workers quando ficarem ociosos.</span>
+      </li>
+      <li class="change">
+        <span class="label">Fora do escopo</span>
+        <span class="text">Não mexer em default browser, LaunchServices ou no comportamento de roteamento de links do app.</span>
+      </li>
+    </ul>
+
+    <h2>Mapa do Plano</h2>
+    <div class="map" aria-label="Mapa das waves">
+      <div class="wave">
+        <div class="step">Wave 0</div>
+        <div class="wave-body">
+          <h3>Backup e inventário</h3>
+          <p>Salvar a configuração atual e mapear skills/processos antes de tocar no fio.</p>
+        </div>
+        <div class="wave-outcome"><strong>Resultado:</strong> rollback pronto e baseline de RAM.</div>
+      </div>
+      <div class="wave">
+        <div class="step">Wave 1</div>
+        <div class="wave-body">
+          <h3>Daemon seguro</h3>
+          <p>Criar o gateway HTTP local com health check, autenticação e LaunchAgent.</p>
+        </div>
+        <div class="wave-outcome"><strong>Resultado:</strong> processo pai leve e sempre vivo.</div>
+      </div>
+      <div class="wave">
+        <div class="step">Wave 2</div>
+        <div class="wave-body">
+          <h3>Workers sob demanda</h3>
+          <p>Adicionar workers Playwright por perfil, idle timeout, leases e restart automático.</p>
+        </div>
+        <div class="wave-outcome"><strong>Resultado:</strong> RAM cai sem perder ferramentas.</div>
+      </div>
+      <div class="wave">
+        <div class="step">Wave 3</div>
+        <div class="wave-body">
+          <h3>Aliases compatíveis</h3>
+          <p>Preservar os nomes antigos no Codex enquanto o backend passa a ser o gateway.</p>
+        </div>
+        <div class="wave-outcome"><strong>Resultado:</strong> skills atuais continuam funcionando.</div>
+      </div>
+      <div class="wave">
+        <div class="step">Wave 4</div>
+        <div class="wave-body">
+          <h3>App e skills</h3>
+          <p>Fazer o app pedir limpeza ao gateway e migrar skills para o namespace único.</p>
+        </div>
+        <div class="wave-outcome"><strong>Resultado:</strong> arquitetura limpa, com rollback preservado.</div>
+      </div>
+    </div>
+
+    <h2>Entregáveis</h2>
+    <ul class="deliverables">
+      <li><strong>Backup seguro</strong>Config atual preservada antes de qualquer alteração.</li>
+      <li><strong>Gateway local</strong>Servidor MCP HTTP leve em loopback, com autenticação.</li>
+      <li><strong>Workers recriáveis</strong>Playwright/CDP nasce sob demanda e morre por idle.</li>
+      <li><strong>Compatibilidade</strong>Prefixes antigos seguem disponíveis durante a migração.</li>
+      <li><strong>App ajustado</strong>Limpeza passa pelo gateway, não por kill direto de PID.</li>
+      <li><strong>Skills atualizadas</strong>Uso final via <code>profile</code> no MCP único.</li>
+    </ul>
+
+    <h2>Riscos Que Importam</h2>
+    <ul class="risk-list">
+      <li class="risk high">
+        <span class="label">Alto</span>
+        <span class="text"><strong>Gateway desligado no startup.</strong><br>Sem daemon vivo, o Codex não vê tools HTTP. Mitigação: LaunchAgent obrigatório com health check.</span>
+      </li>
+      <li class="risk high">
+        <span class="label">Alto</span>
+        <span class="text"><strong>Discovery carregando Playwright.</strong><br>Se listar tools cria workers, a economia de RAM vira teatro. Mitigação: schemas estáticos e teste específico.</span>
+      </li>
+      <li class="risk medium">
+        <span class="label">Médio</span>
+        <span class="text"><strong>Múltiplas threads no mesmo perfil.</strong><br>Uma thread não pode matar o worker da outra. Mitigação: leases, mutex e cleanup sem chamada em voo.</span>
+      </li>
+      <li class="risk medium">
+        <span class="label">Médio</span>
+        <span class="text"><strong>Segurança local.</strong><br>O gateway controla perfis logados. Mitigação: bearer token, loopback e endpoints admin protegidos.</span>
+      </li>
+    </ul>
+
+    <h2>Critérios de Aceite</h2>
+    <ol class="accept-list">
+      <li class="accept">
+        <span class="num">1</span>
+        <span class="text">Nova thread do Codex mostra ferramentas MCP sem abrir quatro workers Playwright pesados no startup.</span>
+      </li>
+      <li class="accept">
+        <span class="num">2</span>
+        <span class="text">Worker morto por idle é recriado na próxima chamada sem <code>Transport closed</code>.</span>
+      </li>
+      <li class="accept">
+        <span class="num">3</span>
+        <span class="text">Pessoal, ES, RJ e Financeiro/CentralSP continuam abrindo no perfil certo.</span>
+      </li>
+      <li class="accept">
+        <span class="num">4</span>
+        <span class="text">Rollback para a configuração atual é simples e testado.</span>
+      </li>
+      <li class="accept">
+        <span class="num">5</span>
+        <span class="text">Build e testes do app passam se a UI/Swift forem alterados.</span>
+      </li>
+    </ol>
+
+    <h2>Revisão Crítica</h2>
+    <div class="review">
+      <p>Foram encontrados gaps críticos/altos e o plano mudou por causa deles: preservar namespaces antigos na primeira fase, impedir spawn pesado em <code>tools/list</code>, adicionar leases por sessão, autenticar o gateway e tornar a integração do app obrigatória.</p>
+    </div>
+
+    <h2>Aprovação</h2>
+    <div class="approval">
+      <p>Nada será implementado até aprovação explícita deste plano.</p>
+    </div>
+  </main>
+</body>
+</html>

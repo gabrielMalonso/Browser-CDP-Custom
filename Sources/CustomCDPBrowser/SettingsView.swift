@@ -36,12 +36,12 @@ struct SettingsView: View {
             }
 
             Section("MCP") {
-                Toggle("Auto-clean idle MCP processes", isOn: $mcpAutoCleanupEnabled)
+                Toggle("Liberar workers ociosos", isOn: $mcpAutoCleanupEnabled)
                     .onChange(of: mcpAutoCleanupEnabled) { _, _ in
                         CDPProfileLauncher.shared.configureAutoCleanup()
                     }
 
-                LabeledContent("Auto-clean rule", value: "Off by default; killing Codex MCPs closes their transport")
+                LabeledContent("Regra", value: "Gateway primeiro; kill direto só no fallback legado")
 
                 Button {
                     cleanIdleMCPClients()
@@ -50,7 +50,7 @@ struct SettingsView: View {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Text("Clean Idle MCPs Now")
+                        Text("Liberar workers agora")
                     }
                 }
                 .disabled(isCleaningMCPClients)
@@ -138,9 +138,9 @@ struct SettingsView: View {
             switch result {
             case .success(let cleanedCount):
                 if cleanedCount == 0 {
-                    mcpCleanupFeedback = "No idle MCPs were ready to clean."
+                    mcpCleanupFeedback = "Nenhum worker ocioso para liberar."
                 } else {
-                    mcpCleanupFeedback = "Cleaned \(cleanedCount) idle MCP process\(cleanedCount == 1 ? "" : "es")."
+                    mcpCleanupFeedback = "Liberou \(cleanedCount) worker\(cleanedCount == 1 ? "" : "s") com segurança."
                 }
             case .failure(let error):
                 mcpCleanupFeedback = error.localizedDescription

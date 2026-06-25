@@ -377,6 +377,28 @@ final class CustomCDPBrowserTests: XCTestCase {
         )
     }
 
+    func testMCPGatewayTokenPrefersEnvironment() {
+        XCTAssertEqual(
+            MCPGatewayClient.gatewayToken(
+                environment: ["GABRIEL_BROWSERS_MCP_TOKEN": "from-env"],
+                envFilePath: "/tmp/missing-gateway-token"
+            ),
+            "from-env"
+        )
+    }
+
+    func testMCPGatewayTokenReadsEnvFile() throws {
+        let file = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("gateway-token-\(UUID().uuidString).env")
+        try "OTHER=value\nGABRIEL_BROWSERS_MCP_TOKEN=from-file\n".write(to: file, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        XCTAssertEqual(
+            MCPGatewayClient.gatewayToken(environment: [:], envFilePath: file.path),
+            "from-file"
+        )
+    }
+
     @MainActor
     func testRoutingDecisionUsesConfiguredMode() {
         XCTAssertEqual(
