@@ -16,7 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: [
-            UserDefaultsKeys.mcpAutoCleanupEnabled: true,
+            UserDefaultsKeys.mcpAutoCleanupEnabled: false,
         ])
 
         NSApp.setActivationPolicy(.accessory)

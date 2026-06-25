@@ -52,3 +52,5 @@ When a selected profile is already running, links are opened through its DevTool
 Profile rows show active Playwright MCP clients for that profile's CDP port. The disconnect button only targets processes with a command line matching `playwright-mcp --cdp-endpoint http://127.0.0.1:<port>` or the equivalent `localhost` endpoint.
 
 This does not close Helium or Chrome, does not kill generic `node` processes, and does not affect MCP clients connected to other profile ports.
+
+Auto-clean is off by default. Killing a Codex-owned Playwright MCP process frees RAM, but it also closes the stdio transport that the current Codex thread is holding. After that, tool calls can fail with `Transport closed` until Codex starts a fresh MCP process.
