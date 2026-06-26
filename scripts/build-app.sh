@@ -10,6 +10,7 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 cd "$ROOT_DIR"
+RELEASE_DIR="$(swift build -c release --show-bin-path)"
 swift build -c release
 
 rm -rf "$APP_DIR"
@@ -17,6 +18,7 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp "$ROOT_DIR/.build/release/$EXECUTABLE_NAME" "$MACOS_DIR/$EXECUTABLE_NAME"
 cp "$ROOT_DIR/Sources/CustomCDPBrowser/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
+find "$RELEASE_DIR" "$ROOT_DIR/.build/release" -maxdepth 1 -name '*.bundle' -exec cp -R {} "$RESOURCES_DIR/" \;
 
 cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
