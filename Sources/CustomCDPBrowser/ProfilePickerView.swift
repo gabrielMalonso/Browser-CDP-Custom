@@ -20,6 +20,7 @@ private enum PanelTheme {
     static let badgePersonal = Color(red: 0.01, green: 0.32, blue: 0.88)
     static let badgeClinic = Color(red: 0.12, green: 0.53, blue: 0.63)
     static let badgeFinance = Color(red: 0.82, green: 0.38, blue: 0.18)
+    static let badgeChrome = Color(red: 0.13, green: 0.45, blue: 0.86)
     static let cardRadius: CGFloat = 12
     static let panelRadius: CGFloat = 14
     static let scrollbarGutter: CGFloat = 8
@@ -57,7 +58,9 @@ struct ProfilePickerView: View {
     @StateObject private var launcher = CDPProfileLauncher.shared
     @StateObject private var linkRouter = LinkRouter.shared
     @State private var openingProfileID: String?
+    @State private var isOpeningNormalChrome = false
     @State private var closingProfileID: String?
+    @State private var isClosingAll = false
     @State private var disconnectingMCPProfileID: String?
     @State private var expandedProfileID: String?
     @State private var feedback: String?
@@ -79,7 +82,7 @@ struct ProfilePickerView: View {
                             isRunning: launcher.runningProfileIDs.contains(profile.id),
                             mcpClientCount: launcher.mcpClientsByProfileID[profile.id]?.count ?? 0,
                             isOpening: openingProfileID == profile.id,
-                            isClosing: closingProfileID == profile.id,
+                            isClosing: isClosingAll || closingProfileID == profile.id,
                             isDisconnectingMCP: disconnectingMCPProfileID == profile.id,
                             allowsRunningSelection: hasPendingLinks,
                             isExpanded: expandedProfileID == profile.id
@@ -91,6 +94,12 @@ struct ProfilePickerView: View {
                             disconnectMCPClients(for: profile)
                         } onClose: {
                             close(profile)
+                        }
+                    }
+
+                    if !hasPendingLinks {
+                        NormalChromeRow(isOpening: isOpeningNormalChrome) {
+                            openNormalGoogleChrome()
                         }
                     }
                 }
@@ -188,6 +197,25 @@ struct ProfilePickerView: View {
                 footerButtonLabel(title: "Configurações", icon: "gearshape")
             }
             .buttonStyle(.plain)
+            .help("Configurações")
+
+            Button {
+                closeAllControlledBrowsers()
+            } label: {
+                if isClosingAll {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 30, height: 30)
+                        .background(
+                            Circle().fill(PanelTheme.border.opacity(0.6))
+                        )
+                } else {
+                    footerButtonLabel(title: "Fechar tudo", icon: "xmark")
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(isClosingAll)
+            .help("Fechar todos os navegadores controlados")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -201,15 +229,14 @@ struct ProfilePickerView: View {
     }
 
     private func footerButtonLabel(title: String, icon: String) -> some View {
-        Label(title, systemImage: icon)
-            .font(.caption.weight(.semibold))
+        Image(systemName: icon)
+            .font(.caption.weight(.bold))
             .foregroundStyle(PanelTheme.textMuted)
-            .lineLimit(1)
-            .padding(.horizontal, 9)
-            .frame(height: 28)
+            .frame(width: 30, height: 30)
             .background(
-                Capsule().fill(PanelTheme.border.opacity(0.6))
+                Circle().fill(PanelTheme.border.opacity(0.6))
             )
+            .accessibilityLabel(title)
     }
 
     private var pendingLinkSummary: String {
@@ -285,6 +312,45 @@ struct ProfilePickerView: View {
         }
     }
 
+    private func openNormalGoogleChrome() {
+        isOpeningNormalChrome = true
+        feedback = "Abrindo Google Chrome normal..."
+
+        launcher.openNormalGoogleChrome { result in
+            isOpeningNormalChrome = false
+
+            switch result {
+            case .success:
+                feedback = "Google Chrome normal aberto"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    onDismiss()
+                }
+            case .failure(let error):
+                feedback = error.localizedDescription
+            }
+        }
+    }
+
+    private func closeAllControlledBrowsers() {
+        isClosingAll = true
+        feedback = "Fechando navegadores controlados..."
+
+        launcher.closeAllControlledBrowsers { result in
+            isClosingAll = false
+
+            switch result {
+            case .success(let closedCount):
+                if closedCount == 0 {
+                    feedback = "Nenhum navegador controlado aberto"
+                } else {
+                    feedback = "Navegadores controlados fechados"
+                }
+            case .failure(let error):
+                feedback = error.localizedDescription
+            }
+        }
+    }
+
     private func disconnectMCPClients(for profile: CDPProfile) {
         disconnectingMCPProfileID = profile.id
         feedback = "Liberando worker MCP de \(profile.name)..."
@@ -308,6 +374,75 @@ struct ProfilePickerView: View {
     private func toggleDetails(for profile: CDPProfile) {
         withAnimation(.easeOut(duration: 0.16)) {
             expandedProfileID = expandedProfileID == profile.id ? nil : profile.id
+        }
+    }
+}
+
+private struct NormalChromeRow: View {
+    let isOpening: Bool
+    let onOpen: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            chromeIcon
+
+            Text("Google Chrome")
+                .font(.body.weight(.regular))
+                .foregroundStyle(PanelTheme.textPrimary)
+
+            Spacer(minLength: 8)
+
+            if isOpening {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "arrow.up.forward.app")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PanelTheme.textPrimary)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        Circle()
+                            .fill(PanelTheme.border.opacity(0.9))
+                    )
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: PanelTheme.cardRadius)
+                .fill(PanelTheme.card)
+                .overlay(
+                    RoundedRectangle(cornerRadius: PanelTheme.cardRadius)
+                        .strokeBorder(PanelTheme.border, lineWidth: 1)
+                )
+        )
+        .shadow(color: PanelTheme.shadow.opacity(0.1), radius: 8, x: 0, y: 6)
+        .contentShape(RoundedRectangle(cornerRadius: PanelTheme.cardRadius))
+        .onTapGesture {
+            guard !isOpening else { return }
+            onOpen()
+        }
+        .help("Abrir Google Chrome normal")
+    }
+
+    @ViewBuilder
+    private var chromeIcon: some View {
+        if let iconURL = Bundle.module.url(forResource: "ChromeIcon", withExtension: "png"),
+           let icon = NSImage(contentsOf: iconURL)
+        {
+            Image(nsImage: icon)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 34, height: 34)
+                .clipShape(Circle())
+        } else {
+            Text("G")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(
+                    Circle()
+                        .fill(PanelTheme.badgeChrome)
+                )
         }
     }
 }

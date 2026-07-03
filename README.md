@@ -1,15 +1,17 @@
 # Custom CDP Browser
 
-Small macOS launcher for Gabriel's persistent Helium CDP profiles.
+Small macOS launcher for Gabriel's persistent Chrome and Helium CDP profiles.
 
 ## Profiles
 
 | Name | Browser | Profile root | Profile directory | Port | Default URL |
 |---|---|---|---|---:|---|
-| Pessoal | Helium | `~/.chrome-cdp/pessoal` | `Default` | `9224` | none |
+| Pessoal | Google Chrome | `~/.chrome-cdp/pessoal` | `Default` | `9224` | none |
 | Central ES | Helium | `~/.chrome-cdp/central-es` | `Default` | `9222` | WhatsApp Web |
 | Central RJ | Helium | `~/.chrome-cdp/central-rj` | `Default` | `9223` | WhatsApp Web |
 | Financeiro/CentralSP | Helium | `~/.chrome-cdp/financeiro-centralsp-helium` | `Profile 1` | `9226` | WhatsApp Web |
+
+The launcher also includes a **Google Chrome normal** action below the CDP profiles. It opens or activates the regular Chrome app without `--user-data-dir`, so Chrome's own profile picker and non-CDP profiles stay available even while the controlled CDP Chrome is running.
 
 ## Development
 
@@ -78,5 +80,9 @@ Rollback is simple: restore the timestamped `~/.codex/config.toml` backup or unc
 Profile rows show active Playwright MCP workers for that profile's CDP port. When the gateway is available, the release button calls `/release` and lets the gateway close the worker cleanly.
 
 This does not close Helium or Chrome, does not kill generic `node` processes, and does not affect workers connected to other profile ports.
+
+## Close controlled browsers
+
+The footer close button terminates only browsers listening on the app's known CDP ports. It closes the controlled CDP profiles without targeting the normal Google Chrome app.
 
 If the gateway is unavailable, the app falls back to the legacy direct process cleanup. That path is deliberately secondary because killing a Codex-owned stdio MCP process closes the transport that the current Codex thread is holding and can cause `Transport closed`.

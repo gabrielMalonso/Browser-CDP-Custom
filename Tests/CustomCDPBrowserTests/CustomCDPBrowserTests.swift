@@ -24,6 +24,42 @@ final class CustomCDPBrowserTests: XCTestCase {
         XCTAssertEqual(CDPProfile.visibleProfiles.first?.id, "pessoal")
     }
 
+    func testPessoalUsesGoogleChromeOfficialApp() {
+        let profile = CDPProfile.profile(withID: "pessoal")
+
+        XCTAssertEqual(profile.browserAppName, "Google Chrome")
+        XCTAssertEqual(profile.profileRoot, "~/.chrome-cdp/pessoal")
+        XCTAssertEqual(profile.profileDirectory, "Default")
+        XCTAssertEqual(profile.port, 9224)
+    }
+
+    func testNormalGoogleChromeDetectionExcludesCDPAndHelperProcesses() {
+        let processIDs = CDPProcessInspector.normalGoogleChromeProcessIDs(
+            from: [
+                CDPProcessInspector.ProcessSnapshot(
+                    processID: "100",
+                    parentProcessID: "1",
+                    residentMemoryKilobytes: 2048,
+                    command: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+                ),
+                CDPProcessInspector.ProcessSnapshot(
+                    processID: "101",
+                    parentProcessID: "1",
+                    residentMemoryKilobytes: 2048,
+                    command: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome --user-data-dir=/Users/gabrielalonso/.chrome-cdp/pessoal --remote-debugging-port=9224"
+                ),
+                CDPProcessInspector.ProcessSnapshot(
+                    processID: "102",
+                    parentProcessID: "100",
+                    residentMemoryKilobytes: 2048,
+                    command: "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper --type=gpu-process"
+                ),
+            ]
+        )
+
+        XCTAssertEqual(processIDs, ["100"])
+    }
+
     func testProfileLookupFallsBackToPessoalForInvalidID() {
         XCTAssertEqual(CDPProfile.profile(withID: "central-rj").id, "central-rj")
         XCTAssertEqual(CDPProfile.profile(withID: "missing").id, "pessoal")
