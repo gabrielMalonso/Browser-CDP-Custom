@@ -72,7 +72,7 @@ struct CDPProfile: Identifiable, Hashable {
             name: "Pessoal",
             profileRoot: "~/.chrome-cdp/pessoal",
             profileDirectory: "Default",
-            browserAppName: "Helium",
+            browserAppName: "Google Chrome",
             port: 9224,
             defaultURL: nil,
             kind: .personal

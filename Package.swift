@@ -14,6 +14,7 @@ let package = Package(
             dependencies: ["KeyboardShortcuts"],
             resources: [
                 .copy("Resources/AppIcon.icns"),
+                .copy("Resources/ChromeIcon.png"),
                 .copy("Resources/MenuBarIcon.svg"),
             ]
         ),
