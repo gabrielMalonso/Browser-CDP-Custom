@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 struct CDPAttachedClient: Equatable, Hashable {
@@ -76,6 +77,14 @@ enum CDPProcessInspector {
         guard isMCPClient || isMCPRunner else { return false }
 
         return hasMatchingCDPEndpoint(in: tokens, for: port)
+    }
+
+    static func isMainGoogleChromeCommand(_ command: String) -> Bool {
+        command.contains("/Google Chrome.app/Contents/MacOS/Google Chrome")
+    }
+
+    static func isNormalGoogleChromeCommand(_ command: String) -> Bool {
+        isMainGoogleChromeCommand(command) && !command.contains("--user-data-dir")
     }
 
     private static func hasMatchingCDPEndpoint(in tokens: [String], for port: Int) -> Bool {
@@ -182,6 +191,13 @@ enum CDPProcessInspector {
         }
     }
 
+    static func normalGoogleChromeProcessIDs(from snapshots: [ProcessSnapshot]) -> [String] {
+        snapshots
+            .filter { isNormalGoogleChromeCommand($0.command) }
+            .sorted { $0.processID.localizedStandardCompare($1.processID) == .orderedAscending }
+            .map(\.processID)
+    }
+
     static func idleMCPProcesses(
         from processes: [MCPProcess],
         listeningPorts: Set<Int>,
@@ -219,6 +235,10 @@ enum CDPProcessInspector {
 
     static func mcpProcesses(on ports: [Int]) throws -> [MCPProcess] {
         try mcpProcesses(from: processSnapshots(), ports: ports)
+    }
+
+    static func normalGoogleChromeProcessIDs() throws -> [String] {
+        try normalGoogleChromeProcessIDs(from: processSnapshots())
     }
 
     static func idleMCPProcesses(on ports: [Int]) throws -> [MCPProcess] {
@@ -473,6 +493,86 @@ final class CDPProfileLauncher: ObservableObject {
                     } else {
                         completion(.failure(LauncherError.endpointStillResponding(profile.port)))
                     }
+                }
+            } catch {
+                await MainActor.run {
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
+    func closeAllControlledBrowsers(completion: @escaping (Result<Int, Error>) -> Void) {
+        Task {
+            do {
+                var closedProfileCount = 0
+                var profilesWithProcesses: [CDPProfile] = []
+
+                for profile in CDPProfile.visibleProfiles {
+                    let processIDs = try CDPProcessInspector.processIDsListening(on: profile.port)
+                    guard !processIDs.isEmpty else { continue }
+
+                    try CDPProcessInspector.terminate(processIDs: processIDs)
+                    closedProfileCount += 1
+                    profilesWithProcesses.append(profile)
+                }
+
+                var portsStillResponding: [Int] = []
+                for profile in profilesWithProcesses {
+                    let didClose = await Self.waitForEndpointToStop(profile.endpoint)
+                    if !didClose {
+                        portsStillResponding.append(profile.port)
+                    }
+                }
+
+                await MainActor.run {
+                    self.refreshStatuses()
+
+                    if portsStillResponding.isEmpty {
+                        completion(.success(closedProfileCount))
+                    } else {
+                        completion(.failure(LauncherError.endpointsStillResponding(portsStillResponding)))
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.refreshStatuses()
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
+    func openNormalGoogleChrome(completion: @escaping (Result<Void, Error>) -> Void) {
+        Task {
+            do {
+                if let processID = try CDPProcessInspector.normalGoogleChromeProcessIDs().first,
+                   let pid = pid_t(processID),
+                   let app = NSRunningApplication(processIdentifier: pid)
+                {
+                    app.activate(options: [.activateAllWindows])
+                    await MainActor.run {
+                        completion(.success(()))
+                    }
+                    return
+                }
+
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                process.arguments = ["-n", "-a", "Google Chrome"]
+                process.standardError = Pipe()
+                try process.run()
+                process.waitUntilExit()
+
+                guard process.terminationStatus == 0 else {
+                    await MainActor.run {
+                        completion(.failure(LauncherError.normalChromeOpenFailed))
+                    }
+                    return
+                }
+
+                await MainActor.run {
+                    completion(.success(()))
                 }
             } catch {
                 await MainActor.run {
@@ -779,18 +879,22 @@ final class CDPProfileLauncher: ObservableObject {
 enum LauncherError: LocalizedError {
     case endpointDidNotRespond(Int)
     case endpointStillResponding(Int)
+    case endpointsStillResponding([Int])
     case openTabFailed(url: URL, port: Int, statusCode: Int?)
     case processLookupFailed(Int)
     case processTerminationFailed
     case mcpClientLookupFailed(Int?)
     case mcpClientsStillConnected(Int)
+    case normalChromeOpenFailed
 
     var errorDescription: String? {
         switch self {
         case .endpointDidNotRespond(let port):
-            "Helium opened, but CDP port \(port) did not respond."
+            "Browser opened, but CDP port \(port) did not respond."
         case .endpointStillResponding(let port):
             "Browser on CDP port \(port) did not close."
+        case .endpointsStillResponding(let ports):
+            "Browsers on CDP ports \(ports.map(String.init).joined(separator: ", ")) did not close."
         case .openTabFailed(let url, let port, let statusCode):
             if let statusCode {
                 "Could not open \(url.absoluteString) on CDP port \(port). DevTools returned \(statusCode)."
@@ -809,6 +913,8 @@ enum LauncherError: LocalizedError {
             }
         case .mcpClientsStillConnected(let port):
             "Some MCP clients are still connected to CDP port \(port)."
+        case .normalChromeOpenFailed:
+            "Could not open normal Google Chrome."
         }
     }
 }
