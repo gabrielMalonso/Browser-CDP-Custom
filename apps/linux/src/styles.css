@@ -1,0 +1,262 @@
+:root {
+  color: #1d1a17;
+  background: transparent;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-width: 420px;
+  min-height: 470px;
+  background: transparent;
+  overflow: hidden;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  min-height: 470px;
+  padding: 14px 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(188, 184, 176, 0.94), rgba(166, 162, 154, 0.96)),
+    #aaa69e;
+  box-shadow:
+    0 24px 58px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 0 5px 9px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brand-icon {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #e24721, #e98b31);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+h1 {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.escape-hint {
+  color: rgba(45, 42, 38, 0.62);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.profile-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 11px;
+}
+
+article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 56px;
+  border: 1px solid rgba(255, 255, 255, 0.44);
+  border-radius: 11px;
+  background: rgba(239, 238, 234, 0.9);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.48);
+  overflow: hidden;
+}
+
+article.active {
+  background: rgba(242, 246, 239, 0.94);
+}
+
+article.missing {
+  opacity: 0.78;
+}
+
+.profile-main {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 0 12px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.profile-copy {
+  min-width: 0;
+}
+
+.profile-copy h2 {
+  overflow: hidden;
+  color: #171513;
+  font-size: 13px;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-copy p {
+  margin-top: 2px;
+  overflow: hidden;
+  color: rgba(43, 40, 36, 0.58);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge,
+.chrome-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.badge-pessoal {
+  background: #1265ea;
+}
+
+.badge-central-es {
+  background: #1d96a7;
+}
+
+.badge-central-rj {
+  background: #1594a7;
+}
+
+.badge-central-sp {
+  background: #dc6831;
+}
+
+.chrome-icon {
+  padding: 0;
+  object-fit: cover;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-right: 10px;
+}
+
+.round-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  background: rgba(64, 60, 55, 0.08);
+  color: rgba(43, 40, 36, 0.72);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.round-button:hover:not(:disabled) {
+  background: rgba(64, 60, 55, 0.14);
+}
+
+.round-button.dark {
+  background: #253f5b;
+  color: #ffffff;
+}
+
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+  padding: 16px 3px 0;
+}
+
+footer strong {
+  color: #1c1a17;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.message {
+  min-height: 14px;
+  padding: 7px 4px 0;
+  color: rgba(43, 40, 36, 0.58);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message.bad {
+  color: #8c2d1c;
+}

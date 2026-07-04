@@ -1,0 +1,49 @@
+{
+  "default_profile_id": "central-es",
+  "profiles": [
+    {
+      "id": "pessoal",
+      "name": "Pessoal",
+      "kind": "personal",
+      "badge": "P",
+      "user_data_dir": "~/.chrome-cdp/pessoal",
+      "profile_directory": "Default",
+      "browser_command": null,
+      "port": 9224,
+      "default_url": null
+    },
+    {
+      "id": "central-es",
+      "name": "Central ES",
+      "kind": "clinic",
+      "badge": "ES",
+      "user_data_dir": "~/.chrome-cdp/central-es",
+      "profile_directory": "Default",
+      "browser_command": null,
+      "port": 9222,
+      "default_url": "https://web.whatsapp.com/"
+    },
+    {
+      "id": "central-rj",
+      "name": "Central RJ",
+      "kind": "clinic",
+      "badge": "RJ",
+      "user_data_dir": "~/.chrome-cdp/central-rj",
+      "profile_directory": "Default",
+      "browser_command": null,
+      "port": 9223,
+      "default_url": "https://web.whatsapp.com/"
+    },
+    {
+      "id": "central-sp",
+      "name": "Financeiro/CentralSP",
+      "kind": "clinic",
+      "badge": "SP",
+      "user_data_dir": "~/.chrome-cdp/financeiro-centralsp",
+      "profile_directory": "Default",
+      "browser_command": null,
+      "port": 9226,
+      "default_url": "https://web.whatsapp.com/"
+    }
+  ]
+}
