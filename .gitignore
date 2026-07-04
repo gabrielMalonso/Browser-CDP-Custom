@@ -13,6 +13,14 @@ xcuserdata/
 *.app/
 *.dmg
 
+# Linux/Tauri app
+apps/linux/node_modules/
+apps/linux/dist/
+apps/linux/target/
+apps/linux/**/target/
+apps/linux/pnpm-lock.yaml
+apps/linux/yarn.lock
+
 # macOS metadata
 .DS_Store
 

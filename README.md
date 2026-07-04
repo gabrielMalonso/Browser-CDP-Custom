@@ -2,6 +2,10 @@
 
 Small macOS launcher for Gabriel's persistent Chrome and Helium CDP profiles.
 
+## Linux app
+
+A nova implementação Linux fica isolada em `apps/linux`, usando Rust/Tauri/Svelte para perfis Chrome CDP e registro Ubuntu via `.desktop`/`xdg-mime`. Veja `apps/linux/README.md`.
+
 ## Profiles
 
 | Name | Browser | Profile root | Profile directory | Port | Default URL |

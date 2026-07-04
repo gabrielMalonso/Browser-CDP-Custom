@@ -1,0 +1,6 @@
+[workspace]
+members = [
+  "crates/cdp-core",
+  "src-tauri"
+]
+resolver = "2"
