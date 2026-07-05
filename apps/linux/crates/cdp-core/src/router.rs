@@ -60,6 +60,14 @@ impl SharedRouter {
         self.launcher.launch_profile(profile_id).await
     }
 
+    pub async fn close_profile(&self, profile_id: &str) -> Result<String> {
+        self.launcher.close_profile(profile_id).await
+    }
+
+    pub async fn close_all_controlled_browsers(&self) -> Result<usize> {
+        self.launcher.close_all_controlled_browsers().await
+    }
+
     pub async fn route_default_url(&self, url: &str) -> Result<String> {
         let profile_id = self.config.default_profile()?.id.clone();
         self.route_url(&profile_id, url).await

@@ -108,6 +108,9 @@ h1 {
 article {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "main actions"
+    "details details";
   align-items: center;
   min-height: 56px;
   border: 1px solid rgba(255, 255, 255, 0.44);
@@ -127,7 +130,12 @@ article.missing {
   opacity: 0.78;
 }
 
+article.expanded {
+  align-items: start;
+}
+
 .profile-main {
+  grid-area: main;
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
   align-items: center;
@@ -198,10 +206,38 @@ article.missing {
 }
 
 .row-actions {
+  grid-area: actions;
   display: flex;
   align-items: center;
   gap: 7px;
   padding-right: 10px;
+}
+
+.profile-details {
+  grid-area: details;
+  display: grid;
+  gap: 5px;
+  padding: 0 12px 11px 57px;
+  color: rgba(43, 40, 36, 0.64);
+  font-size: 10px;
+}
+
+.profile-details p {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.profile-details strong {
+  color: rgba(23, 21, 19, 0.78);
+  font-weight: 820;
+}
+
+.profile-details span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .round-button {

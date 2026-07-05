@@ -62,6 +62,37 @@ async fn route_url(
 }
 
 #[tauri::command]
+async fn close_profile(
+    state: State<'_, Arc<Mutex<AppState>>>,
+    profile_id: String,
+) -> Result<String, String> {
+    let state = state.lock().await;
+    state
+        .router
+        .close_profile(&profile_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn close_all_controlled_browsers(
+    state: State<'_, Arc<Mutex<AppState>>>,
+) -> Result<String, String> {
+    let state = state.lock().await;
+    let closed = state
+        .router
+        .close_all_controlled_browsers()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    Ok(if closed == 0 {
+        "Nenhum navegador controlado estava aberto.".to_string()
+    } else {
+        format!("{closed} navegador(es) controlado(s) encerrado(s).")
+    })
+}
+
+#[tauri::command]
 async fn retry_pending_links(state: State<'_, Arc<Mutex<AppState>>>) -> Result<String, String> {
     let state = state.lock().await;
     state
@@ -148,6 +179,8 @@ pub fn run() {
             pending_links,
             launch_profile,
             route_url,
+            close_profile,
+            close_all_controlled_browsers,
             retry_pending_links,
             open_normal_chrome
         ])
