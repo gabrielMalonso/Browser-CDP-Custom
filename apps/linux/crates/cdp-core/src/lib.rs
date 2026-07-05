@@ -28,6 +28,8 @@ pub enum Error {
     BrowserNotFound,
     #[error("falha ao iniciar navegador: {0}")]
     SpawnFailed(String),
+    #[error("falha ao encerrar navegador: {0}")]
+    StopFailed(String),
     #[error("falha HTTP no CDP: {0}")]
     Http(#[from] reqwest::Error),
     #[error("falha de I/O: {0}")]

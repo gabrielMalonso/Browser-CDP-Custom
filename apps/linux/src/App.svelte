@@ -27,6 +27,7 @@
   let statuses: ProfileStatus[] = [];
   let busy = false;
   let message = "Carregando perfis...";
+  let expandedProfileId: string | null = null;
 
   const refresh = async () => {
     statuses = await invoke<ProfileStatus[]>("profiles");
@@ -54,7 +55,17 @@
   const openNormalChrome = () =>
     run(() => invoke<string>("open_normal_chrome"));
 
+  const closeProfile = (profileId: string) =>
+    run(() => invoke<string>("close_profile", { profileId }));
+
+  const closeAllControlledBrowsers = () =>
+    run(() => invoke<string>("close_all_controlled_browsers"));
+
   const closeWindow = () => getCurrentWindow().close();
+
+  const toggleDetails = (profileId: string) => {
+    expandedProfileId = expandedProfileId === profileId ? null : profileId;
+  };
 
   const formatPort = (port: number) =>
     new Intl.NumberFormat("pt-BR").format(port);
@@ -67,6 +78,16 @@
   };
 
   const badgeClass = (id: string) => `badge badge-${id}`;
+
+  const profileStatusLabel = (status: ProfileStatus) => {
+    if (status.cdp_ok) return "Rodando";
+    if (!status.profile_exists) return "Perfil ausente";
+    if (status.port_open) return "Porta ocupada";
+    return "Disponível";
+  };
+
+  const profileBrowserLabel = (profile: Profile) =>
+    profile.browser_command ?? "Chrome/Chromium automático";
 
   onMount(() => {
     refresh();
@@ -93,7 +114,11 @@
 
   <section class="profile-list" aria-label="Perfis CDP">
     {#each statuses as status}
-      <article class:active={status.cdp_ok} class:missing={!status.profile_exists}>
+      <article
+        class:active={status.cdp_ok}
+        class:missing={!status.profile_exists}
+        class:expanded={expandedProfileId === status.profile.id}
+      >
         <button
           class="profile-main"
           disabled={busy}
@@ -112,16 +137,33 @@
               class="round-button"
               disabled={busy || !status.profile_exists}
               title="Abrir página padrão"
-              on:click={() => openUrl(status.profile.id, status.profile.default_url ?? "")}
+              on:click|stopPropagation={() => openUrl(status.profile.id, status.profile.default_url ?? "")}
             >↗</button>
+          {/if}
+          {#if status.cdp_ok}
+            <button
+              class="round-button"
+              disabled={busy}
+              title={`Fechar ${status.profile.name}`}
+              on:click|stopPropagation={() => closeProfile(status.profile.id)}
+            >×</button>
           {/if}
           <button
             class="round-button"
             disabled={busy}
-            title={status.message}
-            on:click={() => launch(status.profile.id)}
-          >⌄</button>
+            title={expandedProfileId === status.profile.id ? "Ocultar detalhes" : "Mostrar detalhes"}
+            aria-expanded={expandedProfileId === status.profile.id}
+            on:click|stopPropagation={() => toggleDetails(status.profile.id)}
+          >{expandedProfileId === status.profile.id ? "⌃" : "⌄"}</button>
         </div>
+        {#if expandedProfileId === status.profile.id}
+          <div class="profile-details">
+            <p><strong>Default</strong><span>{status.profile.default_url ?? "Sem URL padrão"}</span></p>
+            <p><strong>App</strong><span>{profileBrowserLabel(status.profile)}</span></p>
+            <p><strong>Perfil</strong><span>{status.profile.user_data_dir}/{status.profile.profile_directory}</span></p>
+            <p><strong>Status</strong><span>{profileStatusLabel(status)} · {status.message}</span></p>
+          </div>
+        {/if}
       </article>
     {/each}
 
@@ -144,7 +186,7 @@
     <div class="footer-actions">
       <button class="round-button" on:click={refresh} disabled={busy} title="Atualizar">↻</button>
       <button class="round-button" disabled title="Configurações">⚙</button>
-      <button class="round-button" on:click={closeWindow} title="Fechar janela">×</button>
+      <button class="round-button" on:click={closeAllControlledBrowsers} disabled={busy} title="Fechar navegadores controlados">×</button>
     </div>
   </footer>
 
