@@ -32,6 +32,17 @@ scripts/build-app.sh
 open .build/app/Custom-CDP-Browser.app
 ```
 
+## Validate from Ubuntu on the Mac
+
+This repo can use the Mac mini as a disposable Apple executor while Ubuntu stays the source of truth:
+
+```bash
+scripts/apple-remote-doctor.sh
+scripts/apple-remote-macos-check.sh
+```
+
+Defaults use `mac-mini`, mirror the checkout to `/Volumes/SSD1TB/Projetos/Browser-CDP-Custom-linux-mirror`, then run `swift build`, `swift test`, and `scripts/build-app.sh` on macOS. Override machine-specific values by copying `scripts/apple-remote.env.example` to `.apple-remote.env`.
+
 ## Use as the default browser
 
 Build and open the packaged app:

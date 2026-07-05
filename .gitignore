@@ -25,6 +25,7 @@ apps/linux/yarn.lock
 .DS_Store
 
 # Local automation/tooling state
+.apple-remote.env
 .Codex/
 .playwright-mcp/
 .t3code/
