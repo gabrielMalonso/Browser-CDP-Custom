@@ -1,4 +1,7 @@
-use browser_cdp_core::{AppConfig, BrowserLauncher, PendingLink, ProfileStatus, SharedRouter};
+use browser_cdp_core::{
+    AppConfig, BrowserLauncher, McpGatewayClient, McpGatewayStatus, PendingLink, ProfileStatus,
+    SharedRouter,
+};
 use std::sync::Arc;
 use std::{path::PathBuf, process::Command};
 use tauri::State;
@@ -121,6 +124,25 @@ fn open_normal_chrome() -> Result<String, String> {
     Ok("Google Chrome aberto.".to_string())
 }
 
+#[tauri::command]
+async fn mcp_gateway_status() -> Result<McpGatewayStatus, String> {
+    Ok(McpGatewayClient::new().status().await)
+}
+
+#[tauri::command]
+async fn release_mcp_worker(profile_id: String) -> Result<String, String> {
+    let released = McpGatewayClient::new()
+        .release(&profile_id)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    Ok(if released {
+        format!("Worker MCP de {profile_id} liberado.")
+    } else {
+        format!("Nenhum worker MCP ocioso em {profile_id}.")
+    })
+}
+
 fn which(binary: &&str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
@@ -182,7 +204,9 @@ pub fn run() {
             close_profile,
             close_all_controlled_browsers,
             retry_pending_links,
-            open_normal_chrome
+            open_normal_chrome,
+            mcp_gateway_status,
+            release_mcp_worker
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");

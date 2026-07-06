@@ -21,6 +21,10 @@ apps/linux/**/target/
 apps/linux/pnpm-lock.yaml
 apps/linux/yarn.lock
 
+# Gateway MCP
+gateway/**/node_modules/
+gateway/**/dist/
+
 # macOS metadata
 .DS_Store
 

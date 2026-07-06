@@ -1,0 +1,14 @@
+[Unit]
+Description=Gabriel Browsers MCP Gateway
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.codex/gabriel-browsers-mcp.env
+WorkingDirectory=%h/Projetos/Browser-CDP-Custom/gateway/gabriel-browsers-mcp
+ExecStart=/usr/bin/env npm start
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

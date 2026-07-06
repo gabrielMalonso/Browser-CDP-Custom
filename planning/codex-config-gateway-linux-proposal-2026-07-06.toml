@@ -1,0 +1,79 @@
+# Proposta Linux de migração MCP/CDP - 2026-07-06
+#
+# Arquivo de planejamento. Não aplicar automaticamente em ~/.codex/config.toml.
+# Antes de aplicar:
+# - criar backup timestampado em ~/.codex/backups/
+# - garantir systemd user service ativo
+# - garantir ~/.codex/gabriel-browsers-mcp.env com GABRIEL_BROWSERS_MCP_TOKEN
+
+[mcp_servers.gabriel-browsers]
+url = "http://127.0.0.1:8787/mcp"
+enabled = true
+startup_timeout_sec = 5
+tool_timeout_sec = 120
+bearer_token_env_var = "GABRIEL_BROWSERS_MCP_TOKEN"
+disabled_tools = ["browser_run_code_unsafe"]
+
+[mcp_servers.gabriel-browsers.tools.browser_evaluate]
+approval_mode = "prompt"
+
+[mcp_servers.gabriel-browsers.tools.browser_file_upload]
+approval_mode = "prompt"
+
+# Fase de aliases compatíveis. Aplicar somente depois do canário validar.
+
+[mcp_servers.playwright-cdp-pessoal]
+url = "http://127.0.0.1:8787/pessoal/mcp"
+enabled = true
+startup_timeout_sec = 5
+tool_timeout_sec = 120
+bearer_token_env_var = "GABRIEL_BROWSERS_MCP_TOKEN"
+disabled_tools = ["browser_run_code_unsafe"]
+
+[mcp_servers.playwright-cdp-es]
+url = "http://127.0.0.1:8787/central-es/mcp"
+enabled = true
+startup_timeout_sec = 5
+tool_timeout_sec = 120
+bearer_token_env_var = "GABRIEL_BROWSERS_MCP_TOKEN"
+disabled_tools = ["browser_run_code_unsafe"]
+
+[mcp_servers.playwright-cdp-rj]
+url = "http://127.0.0.1:8787/central-rj/mcp"
+enabled = true
+startup_timeout_sec = 5
+tool_timeout_sec = 120
+bearer_token_env_var = "GABRIEL_BROWSERS_MCP_TOKEN"
+disabled_tools = ["browser_run_code_unsafe"]
+
+[mcp_servers.playwright-cdp-financeiro-centralsp]
+url = "http://127.0.0.1:8787/financeiro-centralsp/mcp"
+enabled = true
+startup_timeout_sec = 5
+tool_timeout_sec = 120
+bearer_token_env_var = "GABRIEL_BROWSERS_MCP_TOKEN"
+disabled_tools = ["browser_run_code_unsafe"]
+
+[mcp_servers.playwright-cdp-pessoal.tools.browser_evaluate]
+approval_mode = "prompt"
+
+[mcp_servers.playwright-cdp-pessoal.tools.browser_file_upload]
+approval_mode = "prompt"
+
+[mcp_servers.playwright-cdp-es.tools.browser_evaluate]
+approval_mode = "prompt"
+
+[mcp_servers.playwright-cdp-es.tools.browser_file_upload]
+approval_mode = "prompt"
+
+[mcp_servers.playwright-cdp-rj.tools.browser_evaluate]
+approval_mode = "prompt"
+
+[mcp_servers.playwright-cdp-rj.tools.browser_file_upload]
+approval_mode = "prompt"
+
+[mcp_servers.playwright-cdp-financeiro-centralsp.tools.browser_evaluate]
+approval_mode = "prompt"
+
+[mcp_servers.playwright-cdp-financeiro-centralsp.tools.browser_file_upload]
+approval_mode = "prompt"

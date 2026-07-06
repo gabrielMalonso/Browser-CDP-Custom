@@ -24,13 +24,45 @@
     message: string;
   };
 
+  type McpWorker = {
+    profile: string;
+    port: number;
+    pid: number | null;
+    residentMemoryKilobytes: number;
+    activeCalls: number;
+    createdAt: string;
+    lastUsedAt: string;
+    idleMs: number;
+    lastError: string | null;
+  };
+
+  type McpGatewayStatus = {
+    healthy: boolean;
+    workers: McpWorker[];
+    message: string;
+  };
+
   let statuses: ProfileStatus[] = [];
+  let mcpStatus: McpGatewayStatus = {
+    healthy: false,
+    workers: [],
+    message: "Gateway MCP indisponível."
+  };
   let busy = false;
   let message = "Carregando perfis...";
   let expandedProfileId: string | null = null;
 
   const refresh = async () => {
-    statuses = await invoke<ProfileStatus[]>("profiles");
+    const [profileStatuses, gatewayStatus] = await Promise.all([
+      invoke<ProfileStatus[]>("profiles"),
+      invoke<McpGatewayStatus>("mcp_gateway_status").catch((error) => ({
+        healthy: false,
+        workers: [],
+        message: String(error)
+      }))
+    ]);
+    statuses = profileStatuses;
+    mcpStatus = gatewayStatus;
     message = statuses.length > 0 ? "Pronto." : "Nenhum perfil configurado.";
   };
 
@@ -61,6 +93,9 @@
   const closeAllControlledBrowsers = () =>
     run(() => invoke<string>("close_all_controlled_browsers"));
 
+  const releaseMcpWorker = (profileId: string) =>
+    run(() => invoke<string>("release_mcp_worker", { profileId }));
+
   const closeWindow = () => getCurrentWindow().close();
 
   const toggleDetails = (profileId: string) => {
@@ -88,6 +123,31 @@
 
   const profileBrowserLabel = (profile: Profile) =>
     profile.browser_command ?? "Chrome/Chromium automático";
+
+  const mcpWorkersForProfile = (profileId: string) =>
+    mcpStatus.workers.filter((worker) => worker.profile === profileId);
+
+  const mcpWorkerLabel = (profileId: string) => {
+    const workers = mcpWorkersForProfile(profileId);
+    if (workers.length === 0) return "Sem workers ativos";
+
+    return workers
+      .map((worker) => `PID ${worker.pid ?? "?"} · ${formatMemory(worker.residentMemoryKilobytes)}`)
+      .join(", ");
+  };
+
+  const formatMemory = (kilobytes: number) => {
+    const megabytes = (kilobytes * 1024) / 1_000_000;
+    return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(megabytes)} MB`;
+  };
+
+  const mcpMemorySummary = () => {
+    const totalKilobytes = mcpStatus.workers.reduce(
+      (sum, worker) => sum + worker.residentMemoryKilobytes,
+      0
+    );
+    return `${formatMemory(totalKilobytes)} · ${mcpStatus.workers.length} worker${mcpStatus.workers.length === 1 ? "" : "s"}`;
+  };
 
   onMount(() => {
     refresh();
@@ -148,6 +208,14 @@
               on:click|stopPropagation={() => closeProfile(status.profile.id)}
             >×</button>
           {/if}
+          {#if mcpWorkersForProfile(status.profile.id).length > 0}
+            <button
+              class="round-button"
+              disabled={busy}
+              title={`Liberar worker MCP de ${status.profile.name}`}
+              on:click|stopPropagation={() => releaseMcpWorker(status.profile.id)}
+            >⇥</button>
+          {/if}
           <button
             class="round-button"
             disabled={busy}
@@ -162,6 +230,7 @@
             <p><strong>App</strong><span>{profileBrowserLabel(status.profile)}</span></p>
             <p><strong>Perfil</strong><span>{status.profile.user_data_dir}/{status.profile.profile_directory}</span></p>
             <p><strong>Status</strong><span>{profileStatusLabel(status)} · {status.message}</span></p>
+            <p><strong>MCP</strong><span>{mcpWorkerLabel(status.profile.id)}</span></p>
           </div>
         {/if}
       </article>
@@ -182,7 +251,7 @@
   </section>
 
   <footer>
-    <strong>MCP RAM · 0 MB</strong>
+    <strong title={mcpStatus.message}>MCP RAM · {mcpMemorySummary()}</strong>
     <div class="footer-actions">
       <button class="round-button" on:click={refresh} disabled={busy} title="Atualizar">↻</button>
       <button class="round-button" disabled title="Configurações">⚙</button>

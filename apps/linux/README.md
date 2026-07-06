@@ -78,6 +78,47 @@ xdg-open 'https://example.com/?origem=teste'
 
 O `.desktop` passa o link como `%u`; a app recebe esse argumento e roteia para o perfil padrão configurado.
 
+## Gateway MCP/CDP
+
+O Linux usa a mesma arquitetura do macOS: o Codex fala com um gateway MCP leve em `http://127.0.0.1:8787`, e o gateway cria workers `@playwright/mcp` sob demanda para cada perfil.
+
+| Path | Uso |
+|---|---|
+| `/health` | Confirma que o processo pai está vivo. |
+| `/mcp` | MCP unificado `gabriel-browsers`, com argumento `profile`. |
+| `/pessoal/mcp` | Alias compatível para `playwright-cdp-pessoal`. |
+| `/central-es/mcp` | Alias compatível para `playwright-cdp-es`. |
+| `/central-rj/mcp` | Alias compatível para `playwright-cdp-rj`. |
+| `/financeiro-centralsp/mcp` | Alias compatível para `playwright-cdp-financeiro-centralsp`. |
+| `/workers` | Status protegido dos workers. |
+| `/release` | Libera worker sem fechar Chrome/CDP. |
+
+Instalação do gateway:
+
+```bash
+cd gateway/gabriel-browsers-mcp
+npm install
+npm run cache-tools
+npm run build
+npm run install-service
+```
+
+Validação:
+
+```bash
+curl -fsS http://127.0.0.1:8787/health
+systemctl --user status gabriel-browsers-mcp.service
+```
+
+Se o gateway precisar abrir Chrome, o `systemd --user` precisa herdar a sessão gráfica:
+
+```bash
+systemctl --user import-environment DISPLAY WAYLAND_DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS XDG_CURRENT_DESKTOP XDG_SESSION_TYPE
+dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS XDG_CURRENT_DESKTOP XDG_SESSION_TYPE
+```
+
+Não habilite `linger` para este serviço por padrão. Ele foi feito para viver junto da sessão gráfica.
+
 ## QA manual
 
 1. Rode `cargo test --manifest-path apps/linux/crates/cdp-core/Cargo.toml`.
