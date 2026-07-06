@@ -1,0 +1,34 @@
+{
+  "name": "gabriel-browsers-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "gabriel-browsers-mcp": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "cache-tools": "tsx src/cacheTools.ts",
+    "dev": "tsx watch src/main.ts",
+    "install-service": "bash scripts/install-systemd-user-service.sh",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@playwright/mcp": "0.0.77",
+    "express": "5.2.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/node": "24.10.1",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "esbuild": "0.28.1"
+  }
+}

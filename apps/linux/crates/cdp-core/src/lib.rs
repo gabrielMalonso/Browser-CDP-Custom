@@ -1,10 +1,12 @@
 mod cdp;
 mod config;
+mod gateway;
 mod launcher;
 mod router;
 
 pub use cdp::{cdp_new_tab_url, CdpClient, CdpVersion};
 pub use config::{AppConfig, ProfileConfig};
+pub use gateway::{gateway_token, McpGatewayClient, McpGatewayStatus, McpWorker};
 pub use launcher::{BrowserLauncher, ProfileStatus};
 pub use router::{PendingLink, SharedRouter};
 
@@ -32,6 +34,8 @@ pub enum Error {
     StopFailed(String),
     #[error("falha HTTP no CDP: {0}")]
     Http(#[from] reqwest::Error),
+    #[error("falha no Gateway MCP: {0}")]
+    Gateway(String),
     #[error("falha de I/O: {0}")]
     Io(#[from] std::io::Error),
     #[error("falha ao ler configuração JSON: {0}")]
