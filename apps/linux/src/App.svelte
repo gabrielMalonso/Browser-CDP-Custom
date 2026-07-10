@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { listen } from "@tauri-apps/api/event";
   import chromeIcon from "./assets/chrome-icon.png";
+  import Settings from "./Settings.svelte";
 
   type Profile = {
     id: string;
@@ -24,25 +25,28 @@
     message: string;
   };
 
+  type PendingLink = { url: string; profile_id: string; error: string };
+  type ActivationContext = {
+    incomingUrls: string[];
+    pendingLinks: PendingLink[];
+    feedback: string | null;
+  };
+  type SelectionResult = { message: string; dismissOverlay: boolean };
   type McpWorker = {
     profile: string;
     port: number;
     pid: number | null;
     residentMemoryKilobytes: number;
-    activeCalls: number;
-    createdAt: string;
-    lastUsedAt: string;
-    idleMs: number;
-    lastError: string | null;
   };
-
   type McpGatewayStatus = {
     healthy: boolean;
     workers: McpWorker[];
     message: string;
   };
 
+  const isSettingsView = new URLSearchParams(window.location.search).get("view") === "settings";
   let statuses: ProfileStatus[] = [];
+  let activation: ActivationContext = { incomingUrls: [], pendingLinks: [], feedback: null };
   let mcpStatus: McpGatewayStatus = {
     healthy: false,
     workers: [],
@@ -53,8 +57,9 @@
   let expandedProfileId: string | null = null;
 
   const refresh = async () => {
-    const [profileStatuses, gatewayStatus] = await Promise.all([
+    const [profileStatuses, context, gatewayStatus] = await Promise.all([
       invoke<ProfileStatus[]>("profiles"),
+      invoke<ActivationContext>("activation_context"),
       invoke<McpGatewayStatus>("mcp_gateway_status").catch((error) => ({
         healthy: false,
         workers: [],
@@ -62,8 +67,9 @@
       }))
     ]);
     statuses = profileStatuses;
+    activation = context;
     mcpStatus = gatewayStatus;
-    message = statuses.length > 0 ? "Pronto." : "Nenhum perfil configurado.";
+    message = context.feedback ?? (statuses.length > 0 ? "Pronto." : "Nenhum perfil configurado.");
   };
 
   const run = async (action: () => Promise<string>) => {
@@ -78,14 +84,32 @@
     }
   };
 
-  const launch = (profileId: string) =>
-    run(() => invoke<string>("launch_profile", { profileId }));
+  const finishSelection = async (action: () => Promise<SelectionResult>) => {
+    busy = true;
+    try {
+      const result = await action();
+      message = result.message;
+      if (result.dismissOverlay) {
+        window.setTimeout(() => invoke("dismiss_overlay"), 180);
+      } else {
+        await refresh();
+      }
+    } catch (error) {
+      message = String(error);
+      await refresh().catch(() => undefined);
+    } finally {
+      busy = false;
+    }
+  };
+
+  const selectProfile = (profileId: string) =>
+    finishSelection(() => invoke<SelectionResult>("activate_profile", { profileId }));
+
+  const selectNormalBrowser = () =>
+    finishSelection(() => invoke<SelectionResult>("activate_normal_browser"));
 
   const openUrl = (profileId: string, url: string) =>
     run(() => invoke<string>("route_url", { profileId, url }));
-
-  const openNormalChrome = () =>
-    run(() => invoke<string>("open_normal_chrome"));
 
   const closeProfile = (profileId: string) =>
     run(() => invoke<string>("close_profile", { profileId }));
@@ -96,170 +120,134 @@
   const releaseMcpWorker = (profileId: string) =>
     run(() => invoke<string>("release_mcp_worker", { profileId }));
 
-  const closeWindow = () => getCurrentWindow().close();
+  const retryPendingLinks = () =>
+    run(() => invoke<string>("retry_pending_links"));
 
+  const dismiss = () => invoke("dismiss_overlay");
+  const openSettings = () => invoke("open_settings_window");
   const toggleDetails = (profileId: string) => {
     expandedProfileId = expandedProfileId === profileId ? null : profileId;
   };
 
-  const formatPort = (port: number) =>
-    new Intl.NumberFormat("pt-BR").format(port);
-
+  const formatPort = (port: number) => new Intl.NumberFormat("pt-BR").format(port);
   const rowState = (status: ProfileStatus) => {
     if (status.cdp_ok) return "CDP ativo";
     if (!status.profile_exists) return "perfil ausente";
     if (status.port_open) return "porta ocupada";
-    return "offline";
+    return "disponível";
   };
-
   const badgeClass = (id: string) => `badge badge-${id}`;
-
-  const profileStatusLabel = (status: ProfileStatus) => {
-    if (status.cdp_ok) return "Rodando";
-    if (!status.profile_exists) return "Perfil ausente";
-    if (status.port_open) return "Porta ocupada";
-    return "Disponível";
-  };
-
-  const profileBrowserLabel = (profile: Profile) =>
-    profile.browser_command ?? "Chrome/Chromium automático";
-
   const mcpWorkersForProfile = (profileId: string) =>
     mcpStatus.workers.filter((worker) => worker.profile === profileId);
-
-  const mcpWorkerLabel = (profileId: string) => {
-    const workers = mcpWorkersForProfile(profileId);
-    if (workers.length === 0) return "Sem workers ativos";
-
-    return workers
-      .map((worker) => `PID ${worker.pid ?? "?"} · ${formatMemory(worker.residentMemoryKilobytes)}`)
-      .join(", ");
-  };
-
   const formatMemory = (kilobytes: number) => {
     const megabytes = (kilobytes * 1024) / 1_000_000;
     return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(megabytes)} MB`;
   };
-
   const mcpMemorySummary = () => {
-    const totalKilobytes = mcpStatus.workers.reduce(
-      (sum, worker) => sum + worker.residentMemoryKilobytes,
-      0
-    );
-    return `${formatMemory(totalKilobytes)} · ${mcpStatus.workers.length} worker${mcpStatus.workers.length === 1 ? "" : "s"}`;
+    const total = mcpStatus.workers.reduce((sum, worker) => sum + worker.residentMemoryKilobytes, 0);
+    return `${formatMemory(total)} · ${mcpStatus.workers.length} worker${mcpStatus.workers.length === 1 ? "" : "s"}`;
+  };
+  const pendingSummary = () => {
+    const first = activation.incomingUrls[0];
+    if (!first) return "";
+    try {
+      const host = new URL(first).host;
+      return `${activation.incomingUrls.length > 1 ? `${activation.incomingUrls.length} links · ` : ""}${host}`;
+    } catch {
+      return first;
+    }
   };
 
   onMount(() => {
+    if (isSettingsView) return;
     refresh();
 
+    let stopListening: (() => void) | undefined;
+    listen("incoming-links", refresh).then((unlisten) => (stopListening = unlisten));
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeWindow();
-      }
+      if (event.key === "Escape") dismiss();
     };
-
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    return () => {
+      stopListening?.();
+      window.removeEventListener("keydown", closeOnEscape);
+    };
   });
 </script>
 
-<main data-tauri-drag-region>
-  <header class="panel-header" data-tauri-drag-region>
-    <div class="brand">
-      <span class="brand-icon" aria-hidden="true">⌁</span>
-      <h1>Custom CDP Browser</h1>
-    </div>
-    <span class="escape-hint">ESC para fechar</span>
-  </header>
-
-  <section class="profile-list" aria-label="Perfis CDP">
-    {#each statuses as status}
-      <article
-        class:active={status.cdp_ok}
-        class:missing={!status.profile_exists}
-        class:expanded={expandedProfileId === status.profile.id}
-      >
-        <button
-          class="profile-main"
-          disabled={busy}
-          title={status.message}
-          on:click={() => launch(status.profile.id)}
-        >
-          <span class={badgeClass(status.profile.id)}>{status.profile.badge}</span>
-          <div class="profile-copy">
-            <h2>{status.profile.name} · porta {formatPort(status.profile.port)}</h2>
-            <p>{rowState(status)}</p>
-          </div>
-        </button>
-        <div class="row-actions">
-          {#if status.profile.default_url}
-            <button
-              class="round-button"
-              disabled={busy || !status.profile_exists}
-              title="Abrir página padrão"
-              on:click|stopPropagation={() => openUrl(status.profile.id, status.profile.default_url ?? "")}
-            >↗</button>
-          {/if}
-          {#if status.cdp_ok}
-            <button
-              class="round-button"
-              disabled={busy}
-              title={`Fechar ${status.profile.name}`}
-              on:click|stopPropagation={() => closeProfile(status.profile.id)}
-            >×</button>
-          {/if}
-          {#if mcpWorkersForProfile(status.profile.id).length > 0}
-            <button
-              class="round-button"
-              disabled={busy}
-              title={`Liberar worker MCP de ${status.profile.name}`}
-              on:click|stopPropagation={() => releaseMcpWorker(status.profile.id)}
-            >⇥</button>
-          {/if}
-          <button
-            class="round-button"
-            disabled={busy}
-            title={expandedProfileId === status.profile.id ? "Ocultar detalhes" : "Mostrar detalhes"}
-            aria-expanded={expandedProfileId === status.profile.id}
-            on:click|stopPropagation={() => toggleDetails(status.profile.id)}
-          >{expandedProfileId === status.profile.id ? "⌃" : "⌄"}</button>
+{#if isSettingsView}
+  <Settings />
+{:else}
+  <main class="overlay" data-tauri-drag-region>
+    <header class="panel-header" data-tauri-drag-region>
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">⌁</span>
+        <div>
+          <h1>{activation.incomingUrls.length > 0 ? "Onde abrir este link?" : "Custom CDP Browser"}</h1>
+          {#if activation.incomingUrls.length > 0}<p class="link-summary">{pendingSummary()}</p>{/if}
         </div>
-        {#if expandedProfileId === status.profile.id}
-          <div class="profile-details">
-            <p><strong>Default</strong><span>{status.profile.default_url ?? "Sem URL padrão"}</span></p>
-            <p><strong>App</strong><span>{profileBrowserLabel(status.profile)}</span></p>
-            <p><strong>Perfil</strong><span>{status.profile.user_data_dir}/{status.profile.profile_directory}</span></p>
-            <p><strong>Status</strong><span>{profileStatusLabel(status)} · {status.message}</span></p>
-            <p><strong>MCP</strong><span>{mcpWorkerLabel(status.profile.id)}</span></p>
-          </div>
-        {/if}
-      </article>
-    {/each}
-
-    <article class="chrome-row">
-      <button class="profile-main" disabled={busy} on:click={openNormalChrome}>
-        <img class="chrome-icon" src={chromeIcon} alt="" />
-        <div class="profile-copy">
-          <h2>Google Chrome</h2>
-          <p>perfil normal</p>
-        </div>
-      </button>
-      <div class="row-actions">
-        <button class="round-button" disabled={busy} title="Abrir Chrome normal" on:click={openNormalChrome}>□</button>
       </div>
-    </article>
-  </section>
+      <button class="escape-hint" on:click={dismiss}>ESC para fechar</button>
+    </header>
 
-  <footer>
-    <strong title={mcpStatus.message}>MCP RAM · {mcpMemorySummary()}</strong>
-    <div class="footer-actions">
-      <button class="round-button" on:click={refresh} disabled={busy} title="Atualizar">↻</button>
-      <button class="round-button" disabled title="Configurações">⚙</button>
-      <button class="round-button" on:click={closeAllControlledBrowsers} disabled={busy} title="Fechar navegadores controlados">×</button>
-    </div>
-  </footer>
+    {#if activation.pendingLinks.length > 0}
+      <button class="pending-banner" disabled={busy} on:click={retryPendingLinks}>
+        <span>↻</span>
+        <span><strong>{activation.pendingLinks.length} link(s) aguardando nova tentativa</strong><small>Clique para reenviar sem perder a URL.</small></span>
+      </button>
+    {/if}
 
-  {#if message !== "Pronto."}
-    <p class:bad={message.includes("erro") || message.includes("falhou") || message.includes("travado")} class="message">{message}</p>
-  {/if}
-</main>
+    <section class="profile-list" aria-label="Perfis CDP">
+      {#each statuses as status}
+        <article class:active={status.cdp_ok} class:missing={!status.profile_exists} class:expanded={expandedProfileId === status.profile.id}>
+          <button class="profile-main" disabled={busy} title={status.message} on:click={() => selectProfile(status.profile.id)}>
+            <span class={badgeClass(status.profile.id)}>{status.profile.badge}</span>
+            <div class="profile-copy">
+              <h2>{status.profile.name} · porta {formatPort(status.profile.port)}</h2>
+              <p>{rowState(status)}</p>
+            </div>
+          </button>
+          <div class="row-actions">
+            {#if status.profile.default_url && activation.incomingUrls.length === 0}
+              <button class="round-button" disabled={busy || !status.profile_exists} title="Abrir página padrão" on:click|stopPropagation={() => openUrl(status.profile.id, status.profile.default_url ?? "")}>↗</button>
+            {/if}
+            {#if status.cdp_ok && activation.incomingUrls.length === 0}
+              <button class="round-button" disabled={busy} title={`Fechar ${status.profile.name}`} on:click|stopPropagation={() => closeProfile(status.profile.id)}>×</button>
+            {/if}
+            {#if mcpWorkersForProfile(status.profile.id).length > 0 && activation.incomingUrls.length === 0}
+              <button class="round-button" disabled={busy} title={`Liberar worker MCP de ${status.profile.name}`} on:click|stopPropagation={() => releaseMcpWorker(status.profile.id)}>⇥</button>
+            {/if}
+            <button class="round-button" disabled={busy} title="Detalhes do perfil" aria-expanded={expandedProfileId === status.profile.id} on:click|stopPropagation={() => toggleDetails(status.profile.id)}>{expandedProfileId === status.profile.id ? "⌃" : "⌄"}</button>
+          </div>
+          {#if expandedProfileId === status.profile.id}
+            <div class="profile-details">
+              <p><strong>App</strong><span>{status.profile.browser_command ?? "Chrome/Chromium automático"}</span></p>
+              <p><strong>Perfil</strong><span>{status.profile.user_data_dir}/{status.profile.profile_directory}</span></p>
+              <p><strong>Status</strong><span>{status.message}</span></p>
+            </div>
+          {/if}
+        </article>
+      {/each}
+
+      <article class="chrome-row">
+        <button class="profile-main" disabled={busy} on:click={selectNormalBrowser}>
+          <img class="chrome-icon" src={chromeIcon} alt="" />
+          <div class="profile-copy"><h2>Google Chrome</h2><p>perfil normal, sem CDP</p></div>
+        </button>
+      </article>
+    </section>
+
+    <footer>
+      <strong title={mcpStatus.message}>MCP RAM · {mcpMemorySummary()}</strong>
+      <div class="footer-actions">
+        <button class="round-button" on:click={refresh} disabled={busy} title="Atualizar">↻</button>
+        <button class="round-button" on:click={openSettings} disabled={busy} title="Configurações">⚙</button>
+        <button class="round-button" on:click={closeAllControlledBrowsers} disabled={busy} title="Fechar navegadores controlados">×</button>
+      </div>
+    </footer>
+
+    {#if message !== "Pronto."}
+      <p class:bad={message.toLowerCase().includes("falha") || message.toLowerCase().includes("erro") || message.toLowerCase().includes("travado")} class="message">{message}</p>
+    {/if}
+  </main>
+{/if}

@@ -1,6 +1,28 @@
 # Browser CDP Custom Linux
 
-Implementação Linux do launcher/roteador de links CDP, isolada da app macOS.
+Implementação Linux do launcher/roteador de links CDP, isolada da app macOS. A janela principal funciona como overlay: escolha um perfil ou o Chrome normal e ela se oculta, mantendo uma única instância leve pronta para a próxima abertura ou link recebido.
+
+## Experiência do overlay
+
+- Abrir o app novamente apenas traz a instância existente para a frente; não cria overlays duplicados.
+- Ao clicar em um navegador, o overlay se oculta automaticamente. Esse comportamento pode ser desligado em **Configurações**.
+- Quando o app recebe um link e a regra é **Perguntar sempre**, o overlay mostra o domínio e deixa você escolher o destino.
+- `Esc` oculta o overlay sem encerrar o processo. Use **Configurações → Encerrar app** para sair completamente.
+
+## Configurações
+
+O botão de engrenagem abre uma janela separada com:
+
+| Opção | Comportamento |
+|---|---|
+| Ocultar após abrir | Fecha visualmente o overlay depois da seleção. |
+| Iniciar com o Ubuntu | Cria uma entrada em `~/.config/autostart` e inicia oculto. |
+| Perguntar sempre | Mostra o seletor a cada link externo. |
+| Destino fixo | Envia links direto para um perfil CDP ou para o Chrome normal. |
+| Último selecionado | Repete a última escolha; antes da primeira, usa o destino fixo. |
+| Definir como padrão | Registra e seleciona o app para `http`, `https` e `text/html` via `xdg-mime`. |
+
+As preferências ficam em `~/.config/browser-cdp-custom-linux/preferences.json`. URLs que falharem durante o roteamento continuam persistidas em `~/.local/share/browser-cdp-custom-linux/pending-links.json` para nova tentativa.
 
 ## Perfis
 
@@ -60,7 +82,9 @@ Se o Ubuntu reclamar de WebKitGTK, instale as dependências do Tauri v2 para Lin
 
 ## Browser padrão no Ubuntu
 
-Depois do build:
+Depois do build, o caminho recomendado é abrir **Configurações → Definir como padrão**. O próprio app cria o `.desktop` apontando para o executável em uso e configura `xdg-mime`.
+
+O script continua disponível para instalação por terminal:
 
 ```bash
 apps/linux/scripts/install-default-browser.sh --yes
@@ -76,7 +100,7 @@ xdg-mime query default x-scheme-handler/https
 xdg-open 'https://example.com/?origem=teste'
 ```
 
-O `.desktop` passa o link como `%u`; a app recebe esse argumento e roteia para o perfil padrão configurado.
+O `.desktop` passa o link como `%u`. A instância única recebe o argumento e aplica a regra escolhida: perguntar, destino fixo ou último selecionado.
 
 ## Gateway MCP/CDP
 
@@ -124,7 +148,8 @@ Não habilite `linger` para este serviço por padrão. Ele foi feito para viver 
 1. Rode `cargo test --manifest-path apps/linux/crates/cdp-core/Cargo.toml`.
 2. Rode `cd apps/linux && npm run check && npm run build`.
 3. Abra `npm run tauri dev` e confirme que ES/RJ aparecem, SP aparece como configurável.
-4. Clique em **Abrir perfil** para ES e confirme `curl -fsS http://127.0.0.1:9222/json/version`.
+4. Clique em ES, confirme que o overlay some e valide `curl -fsS http://127.0.0.1:9222/json/version`.
 5. Use **Abrir URL** com uma URL contendo `?a=1&b=https://x.test/` e confirme que abre em nova aba.
 6. Faça o build Tauri, registre com `install-default-browser.sh --yes`, e teste `xdg-open`.
-7. Teste porta ocupada com algo que não seja CDP e confirme que a app coloca o link na fila em vez de perder a URL.
+7. Configure **Perguntar sempre**, abra dois links com `xdg-open` e confirme que ambos chegam à mesma instância do overlay.
+8. Teste porta ocupada com algo que não seja CDP e confirme que a app coloca o link na fila em vez de perder a URL.
