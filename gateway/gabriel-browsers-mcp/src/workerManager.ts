@@ -60,21 +60,26 @@ export class WorkerManager {
     worker.lastUsedAt = Date.now();
 
     try {
-      return await worker.client.callTool(
-        {
-          name,
-          arguments: args
-        },
-        CompatibilityCallToolResultSchema,
-        {
-          timeout: this.options.toolTimeoutMs
-        }
+      return await withTimeout(
+        worker.client.callTool(
+          {
+            name,
+            arguments: args
+          },
+          CompatibilityCallToolResultSchema,
+          {
+            timeout: this.options.toolTimeoutMs + 1_000
+          }
+        ),
+        this.options.toolTimeoutMs,
+        () => new Error(`${name} excedeu ${this.options.toolTimeoutMs} ms; o worker ${profile.id} será recriado.`)
       );
     } catch (error) {
       worker.lastError = errorMessage(error);
       if (worker.lastError.includes("ref") || worker.lastError.includes("closed") || worker.lastError.includes("Target")) {
         worker.lastError = `${worker.lastError}\n\nO worker pode ter sido recriado; rode um novo snapshot antes de reutilizar refs antigas.`;
       }
+      await this.closeWorker(profile.id, worker);
       throw error;
     } finally {
       worker.activeCalls -= 1;
@@ -197,10 +202,49 @@ export class WorkerManager {
   }
 
   private async closeWorker(profileId: string, worker: WorkerRecord) {
+    if (this.workers.get(profileId) !== worker) {
+      return;
+    }
+
     this.workers.delete(profileId);
-    await worker.client.close().catch(() => undefined);
-    await worker.transport.close().catch(() => undefined);
+    await settlesWithin(worker.client.close(), 1_000);
+    const transportClosed = await settlesWithin(worker.transport.close(), 1_000);
+    if (!transportClosed && worker.transport.pid) {
+      try {
+        process.kill(worker.transport.pid, "SIGKILL");
+      } catch {
+        return;
+      }
+    }
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, error: () => Error): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(error()), timeoutMs);
+    timer.unref();
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+async function settlesWithin(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined;
+  const settled = promise.then(
+    () => true,
+    () => true
+  );
+  const timedOut = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs);
+    timer.unref();
+  });
+
+  return Promise.race([settled, timedOut]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 function residentMemoryKilobytes(pid: number | null) {

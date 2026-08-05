@@ -151,7 +151,10 @@ async function spawnBrowser(profile: ProfileConfig) {
       "--remote-allow-origins=*",
       "--no-first-run",
       "--password-store=basic",
-      "--disable-features=DevToolsDebuggingRestrictions"
+      "--disable-features=DevToolsDebuggingRestrictions",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding"
     ],
     {
       detached: true,

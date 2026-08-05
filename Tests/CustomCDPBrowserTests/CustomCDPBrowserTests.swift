@@ -33,6 +33,15 @@ final class CustomCDPBrowserTests: XCTestCase {
         XCTAssertEqual(profile.port, 9224)
     }
 
+    @MainActor
+    func testBrowserLaunchKeepsCDPTabsActiveForAutomation() {
+        let arguments = CDPProfileLauncher.launchArguments(for: CDPProfile.defaultProfile)
+
+        XCTAssertTrue(arguments.contains("--disable-background-timer-throttling"))
+        XCTAssertTrue(arguments.contains("--disable-backgrounding-occluded-windows"))
+        XCTAssertTrue(arguments.contains("--disable-renderer-backgrounding"))
+    }
+
     func testNormalGoogleChromeDetectionExcludesCDPAndHelperProcesses() {
         let processIDs = CDPProcessInspector.normalGoogleChromeProcessIDs(
             from: [
