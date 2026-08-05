@@ -140,7 +140,7 @@ export function loadGatewayConfig(configPath?: string): GatewayConfig {
     token: process.env.GABRIEL_BROWSERS_MCP_TOKEN ?? readTokenFromEnvFile(),
     idleTimeoutMs: Number(process.env.GABRIEL_BROWSERS_MCP_IDLE_MS ?? 300_000),
     workerSweepMs: Number(process.env.GABRIEL_BROWSERS_MCP_SWEEP_MS ?? 60_000),
-    toolTimeoutMs: Number(process.env.GABRIEL_BROWSERS_MCP_TOOL_TIMEOUT_MS ?? 120_000),
+    toolTimeoutMs: Number(process.env.GABRIEL_BROWSERS_MCP_TOOL_TIMEOUT_MS ?? 15_000),
     configPath: configPath ?? process.env.BROWSER_CDP_CUSTOM_CONFIG ?? defaultConfigPath()
   };
 }

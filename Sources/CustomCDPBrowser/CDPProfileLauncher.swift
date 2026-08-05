@@ -750,7 +750,12 @@ final class CDPProfileLauncher: ObservableObject {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
 
-        let arguments = [
+        process.arguments = Self.launchArguments(for: profile)
+        try process.run()
+    }
+
+    static func launchArguments(for profile: CDPProfile) -> [String] {
+        [
             "-na", profile.browserAppName,
             "--args",
             "--user-data-dir=\(profile.expandedProfileRoot)",
@@ -759,10 +764,10 @@ final class CDPProfileLauncher: ObservableObject {
             "--remote-allow-origins=*",
             "--no-first-run",
             "--disable-features=DevToolsDebuggingRestrictions",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
         ]
-
-        process.arguments = arguments
-        try process.run()
     }
 
     static func startupURL(for profile: CDPProfile, initialURL: URL?) -> URL? {
