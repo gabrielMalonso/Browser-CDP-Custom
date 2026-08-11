@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.playwright-mcp/
+uploads/
+*.log
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.zip
+wa-actions-*.json
+*-receipt-base64.txt

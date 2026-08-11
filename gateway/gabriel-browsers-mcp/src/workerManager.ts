@@ -1,221 +1,251 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { CompatibilityCallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
-import { execFileSync } from "node:child_process";
-import type { ProfileConfig } from "./config.js";
-import { ensureBrowser } from "./browser.js";
-import { errorMessage, GatewayError } from "./errors.js";
+import { CompatibilityCallToolResultSchema, type CompatibilityCallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import path from "node:path";
+import { ensureBrowserRunning } from "./browserLauncher.js";
+import { cdpEndpoint, getProfile, profiles, type ProfileId } from "./profileRegistry.js";
 
 type WorkerRecord = {
-  profile: ProfileConfig;
+  profileId: ProfileId;
   client: Client;
   transport: StdioClientTransport;
-  activeCalls: number;
-  createdAt: number;
+  pid: number | null;
+  callsInFlight: number;
+  leaseCount: number;
   lastUsedAt: number;
-  lastError: string | null;
+  closing: boolean;
+  mutex: Promise<unknown>;
 };
 
-export type WorkerSnapshot = {
-  profile: string;
-  port: number;
+export type WorkerStatus = {
+  profileId: ProfileId;
   pid: number | null;
-  residentMemoryKilobytes: number;
-  activeCalls: number;
-  createdAt: string;
-  lastUsedAt: string;
+  callsInFlight: number;
+  leaseCount: number;
   idleMs: number;
-  lastError: string | null;
+  closing: boolean;
+  circuitOpenUntil: number | null;
 };
+
+export type WorkerManagerOptions = {
+  idleTimeoutMs: number;
+  toolTimeoutMs?: number;
+  launchBrowsers: boolean;
+  now?: () => number;
+  command?: string;
+  argsForProfile?: (profileId: ProfileId) => string[];
+  ensureBrowser?: (profileId: ProfileId) => Promise<void>;
+};
+
+const gatewayRoot = process.env.GABRIEL_BROWSERS_MCP_ROOT ?? process.cwd();
+const defaultCommand = path.join(gatewayRoot, "node_modules", ".bin", "playwright-mcp");
 
 export class WorkerManager {
-  private readonly workers = new Map<string, WorkerRecord>();
-  private readonly pendingStarts = new Map<string, Promise<WorkerRecord>>();
-  private sweepTimer: NodeJS.Timeout | null = null;
+  private readonly workers = new Map<ProfileId, WorkerRecord>();
+  private readonly workerCreations = new Map<ProfileId, Promise<WorkerRecord>>();
+  private readonly now: () => number;
+  private readonly replacementFailures = new Map<ProfileId, number[]>();
+  private readonly circuitOpenUntil = new Map<ProfileId, number>();
+  private cleanupTimer: NodeJS.Timeout | undefined;
 
-  constructor(
-    private readonly options: {
-      idleTimeoutMs: number;
-      sweepMs: number;
-      toolTimeoutMs: number;
-    }
-  ) {}
-
-  startSweeper() {
-    if (this.sweepTimer) {
-      return;
-    }
-
-    this.sweepTimer = setInterval(() => {
-      this.releaseIdleWorkers().catch((error) => {
-        console.error("Falha ao liberar workers ociosos:", error);
-      });
-    }, this.options.sweepMs);
-    this.sweepTimer.unref();
+  constructor(private readonly options: WorkerManagerOptions) {
+    this.now = options.now ?? Date.now;
   }
 
-  async callTool(profile: ProfileConfig, name: string, args: Record<string, unknown>) {
-    const worker = await this.workerFor(profile);
-    worker.activeCalls += 1;
-    worker.lastUsedAt = Date.now();
+  startIdleCleanup(): void {
+    this.cleanupTimer ??= setInterval(() => {
+      void this.cleanupIdleWorkers();
+    }, Math.min(this.options.idleTimeoutMs, 60_000)).unref();
+  }
 
-    try {
-      return await withTimeout(
-        worker.client.callTool(
-          {
-            name,
-            arguments: args
-          },
-          CompatibilityCallToolResultSchema,
-          {
-            timeout: this.options.toolTimeoutMs + 1_000
-          }
-        ),
-        this.options.toolTimeoutMs,
-        () => new Error(`${name} excedeu ${this.options.toolTimeoutMs} ms; o worker ${profile.id} será recriado.`)
-      );
-    } catch (error) {
-      worker.lastError = errorMessage(error);
-      if (worker.lastError.includes("ref") || worker.lastError.includes("closed") || worker.lastError.includes("Target")) {
-        worker.lastError = `${worker.lastError}\n\nO worker pode ter sido recriado; rode um novo snapshot antes de reutilizar refs antigas.`;
+  stopIdleCleanup(): void {
+    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
+    this.cleanupTimer = undefined;
+  }
+
+  listStatuses(): WorkerStatus[] {
+    const now = this.now();
+    return profiles.map((profile) => {
+      const worker = this.workers.get(profile.id);
+      return {
+        profileId: profile.id,
+        pid: worker?.pid ?? null,
+        callsInFlight: worker?.callsInFlight ?? 0,
+        leaseCount: worker?.leaseCount ?? 0,
+        idleMs: worker ? Math.max(0, now - worker.lastUsedAt) : 0,
+        closing: worker?.closing ?? false,
+        circuitOpenUntil: this.circuitOpenUntil.get(profile.id) ?? null,
+      };
+    });
+  }
+
+  async callTool(
+    profileId: ProfileId,
+    name: string,
+    args: Record<string, unknown> | undefined,
+  ): Promise<CompatibilityCallToolResult> {
+    const worker = await this.ensureWorker(profileId);
+    return this.withWorkerMutex(worker, async () => {
+      if (worker.closing || this.workers.get(profileId) !== worker) {
+        return this.callTool(profileId, name, args);
       }
-      await this.closeWorker(profile.id, worker);
-      throw error;
-    } finally {
-      worker.activeCalls -= 1;
-      worker.lastUsedAt = Date.now();
-    }
+
+      worker.callsInFlight += 1;
+      worker.leaseCount += 1;
+      try {
+        const timeoutMs = this.options.toolTimeoutMs ?? 15_000;
+        return await withTimeout(
+          worker.client.callTool(
+            { name, arguments: normalizeToolArguments(name, args) },
+            CompatibilityCallToolResultSchema,
+            { timeout: timeoutMs + 1_000 },
+          ),
+          timeoutMs,
+          () => Object.assign(
+            new Error(`${name} excedeu ${timeoutMs} ms; o worker ${profileId} será recriado.`),
+            { code: "worker_tool_timeout", statusCode: 504 },
+          ),
+        );
+      } catch (error) {
+        if (shouldReplaceWorker(error)) {
+          await this.closeWorker(profileId, worker);
+          this.recordReplacementFailure(profileId);
+        }
+        throw normalizeWorkerError(error);
+      } finally {
+        worker.callsInFlight -= 1;
+        worker.leaseCount -= 1;
+        worker.lastUsedAt = this.now();
+      }
+    });
   }
 
-  snapshots(): WorkerSnapshot[] {
-    const now = Date.now();
-    return [...this.workers.values()].map((worker) => ({
-      profile: worker.profile.id,
-      port: worker.profile.port,
-      pid: worker.transport.pid,
-      residentMemoryKilobytes: residentMemoryKilobytes(worker.transport.pid),
-      activeCalls: worker.activeCalls,
-      createdAt: new Date(worker.createdAt).toISOString(),
-      lastUsedAt: new Date(worker.lastUsedAt).toISOString(),
-      idleMs: Math.max(0, now - worker.lastUsedAt),
-      lastError: worker.lastError
-    }));
-  }
-
-  async release(profileId: string) {
+  async release(profileId: ProfileId): Promise<boolean> {
     const worker = this.workers.get(profileId);
-    if (!worker || worker.activeCalls > 0) {
+    if (!worker || worker.callsInFlight > 0 || worker.leaseCount > 0) {
       return false;
     }
-
     await this.closeWorker(profileId, worker);
     return true;
   }
 
-  async releaseIdleWorkers() {
-    let released = 0;
-    const now = Date.now();
-
-    for (const [profileId, worker] of this.workers) {
-      if (worker.activeCalls > 0) {
-        continue;
-      }
-
-      if (now - worker.lastUsedAt >= this.options.idleTimeoutMs) {
-        await this.closeWorker(profileId, worker);
-        released += 1;
-      }
+  async cleanupIdleWorkers(): Promise<number> {
+    let closed = 0;
+    const now = this.now();
+    for (const worker of [...this.workers.values()]) {
+      if (worker.callsInFlight > 0 || worker.leaseCount > 0) continue;
+      if (now - worker.lastUsedAt < this.options.idleTimeoutMs) continue;
+      await this.closeWorker(worker.profileId, worker);
+      closed += 1;
     }
-
-    return released;
+    return closed;
   }
 
-  async closeAll() {
-    await Promise.all([...this.workers].map(([profileId, worker]) => this.closeWorker(profileId, worker)));
+  async closeAll(): Promise<void> {
+    this.stopIdleCleanup();
+    await Promise.allSettled([...this.workerCreations.values()]);
+    await Promise.all([...this.workers.keys()].map((profileId) => this.closeWorker(profileId)));
   }
 
-  private async workerFor(profile: ProfileConfig) {
-    const existing = this.workers.get(profile.id);
-    if (existing) {
-      return existing;
+  private async ensureWorker(profileId: ProfileId): Promise<WorkerRecord> {
+    const circuitOpenUntil = this.circuitOpenUntil.get(profileId) ?? 0;
+    if (circuitOpenUntil > this.now()) {
+      throw Object.assign(
+        new Error(`O circuit breaker de ${profileId} está aberto até ${new Date(circuitOpenUntil).toISOString()}.`),
+        { code: "worker_circuit_open", statusCode: 503 },
+      );
     }
+    if (circuitOpenUntil) this.circuitOpenUntil.delete(profileId);
+    const existing = this.workers.get(profileId);
+    if (existing && !existing.closing) return existing;
 
-    const pending = this.pendingStarts.get(profile.id);
-    if (pending) {
-      return pending;
-    }
+    const pendingCreation = this.workerCreations.get(profileId);
+    if (pendingCreation) return pendingCreation;
 
-    const start = this.startWorker(profile);
-    this.pendingStarts.set(profile.id, start);
-
+    const creation = this.createWorker(profileId);
+    this.workerCreations.set(profileId, creation);
     try {
-      return await start;
+      return await creation;
     } finally {
-      this.pendingStarts.delete(profile.id);
+      if (this.workerCreations.get(profileId) === creation) {
+        this.workerCreations.delete(profileId);
+      }
     }
   }
 
-  private async startWorker(profile: ProfileConfig) {
-    await ensureBrowser(profile);
+  private async createWorker(profileId: ProfileId): Promise<WorkerRecord> {
+    const existing = this.workers.get(profileId);
+    if (existing && !existing.closing) return existing;
+
+    const profile = getProfile(profileId);
+    if (this.options.ensureBrowser) {
+      await this.options.ensureBrowser(profileId);
+    } else {
+      await ensureBrowserRunning(profile, this.options.launchBrowsers);
+    }
 
     const transport = new StdioClientTransport({
-      command: process.env.PLAYWRIGHT_MCP_COMMAND ?? "playwright-mcp",
-      args: [
-        "--cdp-endpoint",
-        `http://127.0.0.1:${profile.port}`,
-        "--cdp-timeout",
-        "30000",
-        "--output-mode",
-        "stdout"
-      ],
-      env: process.env as Record<string, string>,
-      stderr: "pipe"
+      command: this.options.command ?? defaultCommand,
+      args: this.options.argsForProfile?.(profileId) ?? ["--cdp-endpoint", cdpEndpoint(profile)],
+      cwd: gatewayRoot,
+      stderr: "pipe",
     });
-    let stderr = "";
-    transport.stderr?.on("data", (chunk) => {
-      stderr += String(chunk);
-    });
-
-    const client = new Client({
-      name: `gabriel-browsers-worker-${profile.id}`,
-      version: "0.1.0"
-    });
-
-    try {
-      await client.connect(transport, { timeout: 30_000 });
-    } catch (error) {
-      await transport.close().catch(() => undefined);
-      throw new GatewayError(`falha ao iniciar worker MCP de ${profile.id}: ${errorMessage(error)}\n${stderr}`.trim(), 502);
-    }
+    const client = new Client({ name: `gabriel-browsers-worker-${profileId}`, version: "0.1.0" });
+    await client.connect(transport, { timeout: 30_000 });
 
     const worker: WorkerRecord = {
-      profile,
+      profileId,
       client,
       transport,
-      activeCalls: 0,
-      createdAt: Date.now(),
-      lastUsedAt: Date.now(),
-      lastError: null
+      pid: transport.pid,
+      callsInFlight: 0,
+      leaseCount: 0,
+      lastUsedAt: this.now(),
+      closing: false,
+      mutex: Promise.resolve(),
     };
-    this.workers.set(profile.id, worker);
+
+    transport.onclose = () => {
+      if (this.workers.get(profileId) === worker) {
+        this.workers.delete(profileId);
+      }
+    };
+
+    this.workers.set(profileId, worker);
     return worker;
   }
 
-  private async closeWorker(profileId: string, worker: WorkerRecord) {
-    if (this.workers.get(profileId) !== worker) {
-      return;
-    }
+  private async closeWorker(profileId: ProfileId, expectedWorker?: WorkerRecord): Promise<void> {
+    const worker = this.workers.get(profileId);
+    if (!worker || (expectedWorker && worker !== expectedWorker)) return;
 
+    worker.closing = true;
     this.workers.delete(profileId);
     await settlesWithin(worker.client.close(), 1_000);
     const transportClosed = await settlesWithin(worker.transport.close(), 1_000);
-    if (!transportClosed && worker.transport.pid) {
+    if (!transportClosed && worker.pid) {
       try {
-        process.kill(worker.transport.pid, "SIGKILL");
+        process.kill(worker.pid, "SIGKILL");
       } catch {
         return;
       }
     }
+  }
+
+  private async withWorkerMutex<T>(worker: WorkerRecord, fn: () => Promise<T>): Promise<T> {
+    const previous = worker.mutex.catch(() => undefined);
+    const next = previous.then(fn);
+    worker.mutex = next.catch(() => undefined);
+    return next;
+  }
+
+  private recordReplacementFailure(profileId: ProfileId): void {
+    const cutoff = this.now() - 60_000;
+    const failures = [...(this.replacementFailures.get(profileId) ?? []), this.now()].filter(
+      (timestamp) => timestamp >= cutoff,
+    );
+    this.replacementFailures.set(profileId, failures);
+    if (failures.length >= 3) this.circuitOpenUntil.set(profileId, this.now() + 30_000);
   }
 }
 
@@ -235,7 +265,7 @@ async function settlesWithin(promise: Promise<unknown>, timeoutMs: number): Prom
   let timer: NodeJS.Timeout | undefined;
   const settled = promise.then(
     () => true,
-    () => true
+    () => true,
   );
   const timedOut = new Promise<boolean>((resolve) => {
     timer = setTimeout(() => resolve(false), timeoutMs);
@@ -247,17 +277,35 @@ async function settlesWithin(promise: Promise<unknown>, timeoutMs: number): Prom
   });
 }
 
-function residentMemoryKilobytes(pid: number | null) {
-  if (!pid) {
-    return 0;
+function normalizeToolArguments(
+  name: string,
+  args: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (name === "browser_tabs" && !args?.action) {
+    return { ...(args ?? {}), action: "list" };
   }
 
-  try {
-    const output = execFileSync("ps", ["-o", "rss=", "-p", String(pid)], {
-      encoding: "utf8"
+  return args;
+}
+
+function normalizeWorkerError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/ref|element|snapshot|locator/i.test(message)) {
+    return Object.assign(new Error(`${message}\n\nFaça um novo browser_snapshot antes de agir de novo.`), {
+      code: errorCode(error),
     });
-    return Number(output.trim()) || 0;
-  } catch {
-    return 0;
   }
+  return error instanceof Error ? error : new Error(message);
+}
+
+function shouldReplaceWorker(error: unknown): boolean {
+  if (errorCode(error) === "worker_tool_timeout") return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /transport closed|connection closed|browser has been closed|target page, context or browser has been closed/i.test(message);
+}
+
+function errorCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
+    ? error.code
+    : undefined;
 }
