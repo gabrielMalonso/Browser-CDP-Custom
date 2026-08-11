@@ -140,5 +140,4 @@ struct LinkRoutingFailure: Error {
 enum UserDefaultsKeys {
     static let linkRoutingMode = "linkRoutingMode"
     static let lastSelectedProfileID = "lastSelectedProfileID"
-    static let mcpAutoCleanupEnabled = "mcpAutoCleanupEnabled"
 }

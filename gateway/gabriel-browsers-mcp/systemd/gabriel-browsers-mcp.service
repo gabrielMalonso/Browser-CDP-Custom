@@ -1,12 +1,12 @@
 [Unit]
-Description=Gabriel Browsers MCP Gateway
-After=network.target
+Description=Gabriel Browsers Supervisor
+After=network.target graphical-session.target
 
 [Service]
 Type=simple
 EnvironmentFile=%h/.codex/gabriel-browsers-mcp.env
-WorkingDirectory=%h/Projetos/Browser-CDP-Custom/gateway/gabriel-browsers-mcp
-ExecStart=/usr/bin/env npm start
+WorkingDirectory=%h/.local/share/gabriel-browsers-mcp/current
+ExecStart=%h/.local/share/gabriel-browsers-mcp/current/scripts/start-gateway.sh
 Restart=always
 RestartSec=2
 

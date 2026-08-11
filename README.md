@@ -1,10 +1,12 @@
 # Custom CDP Browser
 
-Small macOS launcher for Gabriel's persistent Chrome and Helium CDP profiles.
+Painel macOS e roteador de links para os perfis Chrome e Helium persistentes do Gabriel.
+
+O app não controla processos ou locks diretamente. Ele usa o supervisor local em `127.0.0.1:8787` como autoridade única para iniciar, consultar, abrir URLs, liberar workers e encerrar perfis.
 
 ## Linux app
 
-A nova implementação Linux fica isolada em `apps/linux`, usando Rust/Tauri/Svelte para perfis Chrome CDP e registro Ubuntu via `.desktop`/`xdg-mime`. Veja `apps/linux/README.md`.
+A implementação Linux fica em `apps/linux`, usando Rust/Tauri/Svelte e a mesma control API v1 do app macOS. Ela não mantém launcher, inspeção de processo ou limpeza de lock próprios. Veja `apps/linux/README.md`.
 
 ## Profiles
 
@@ -62,22 +64,26 @@ The **Open links:** setting controls links opened from outside the app:
 | Pessoal | Opens incoming links directly in the Pessoal CDP profile. |
 | Last Selected | Opens incoming links in the last profile selected from the launcher, falling back to Pessoal. |
 
-When a selected profile is already running, links are opened through its DevTools `/json/new` endpoint. When it is closed, the browser is launched without an initial URL, waits for CDP to respond, then opens the incoming URL through `/json/new` instead of the profile's default URL.
+Links recebidos são enviados ao endpoint autenticado do supervisor. O supervisor garante que o perfil esteja pronto e abre a nova aba sob uma lease exclusiva curta.
 
 ## Gateway MCP/CDP
 
-Codex talks to a lightweight local MCP gateway at `http://127.0.0.1:8787`. The gateway stays alive through the LaunchAgent `com.gabrielalonso.gabriel-browsers-mcp` and creates Playwright/CDP workers only when a tool is called.
+Codex e este app compartilham o supervisor leve em `http://127.0.0.1:8787`. O LaunchAgent `com.gabrielalonso.gabriel-browsers-mcp` mantém somente o gateway pai ativo; workers Playwright/CDP continuam sendo criados sob demanda.
 
 | Path | Purpose |
 |---|---|
-| `/health` | Confirms the parent gateway is alive. |
+| `/health` | Informa versão e capacidades do supervisor. |
+| `/v1/profiles` | Manifesto efetivo, estado dos browsers, workers e leases. |
+| `/v1/profiles/:id/start` | Inicia o perfil de forma serializada e segura. |
+| `/v1/profiles/:id/stop` | Encerra somente quando não há lease/chamada ativa. |
+| `/v1/profiles/:id/open-url` | Abre uma aba sob lease exclusiva curta. |
+| `/v1/profiles/:id/worker/release` | Libera o worker sem fechar o browser. |
 | `/mcp` | Unified MCP server `gabriel-browsers`; tools receive a `profile` argument. |
 | `/pessoal/mcp` | Compatibility alias for `playwright-cdp-pessoal`. |
 | `/central-es/mcp` | Compatibility alias for `playwright-cdp-es`. |
 | `/central-rj/mcp` | Compatibility alias for `playwright-cdp-rj`. |
 | `/financeiro-centralsp/mcp` | Compatibility alias for `playwright-cdp-financeiro-centralsp`. |
-| `/workers` | Protected worker status endpoint. |
-| `/release` | Protected endpoint to release a worker without closing Helium. |
+| `/workers`, `/release` | Compatibilidade com clientes antigos. |
 
 The gateway binds to `127.0.0.1`, validates loopback `Host`, and requires `Authorization: Bearer $GABRIEL_BROWSERS_MCP_TOKEN` for MCP/admin endpoints. The token lives in `~/.codex/gabriel-browsers-mcp.env`.
 
@@ -88,16 +94,14 @@ curl -fsS http://127.0.0.1:8787/health
 launchctl print gui/$UID/com.gabrielalonso.gabriel-browsers-mcp
 ```
 
-Rollback is simple: restore the timestamped `~/.codex/config.toml` backup or uncomment the preserved stdio block in the config, then restart Codex.
+O runtime fica em releases imutáveis sob `~/.codex/gabriel-browsers-mcp/releases` no macOS e `~/.local/share/gabriel-browsers-mcp/releases` no Linux. O runtime macOS permanece no disco interno para não depender da permissão de volumes removíveis do `launchd`. Rollback troca apenas o symlink `current`; profiles e browsers não são copiados nem reiniciados.
 
-## Release MCP workers
+## Responsabilidade do app
 
-Profile rows show active Playwright MCP workers for that profile's CDP port. When the gateway is available, the release button calls `/release` and lets the gateway close the worker cleanly.
+O app pode solicitar ao supervisor que libere um worker ocioso ou encerre um browser controlado. Ele não possui fallback de `kill`, não procura processos pela porta, não remove `SingletonLock` e não chama `/json/new` diretamente.
 
-This does not close Helium or Chrome, does not kill generic `node` processes, and does not affect workers connected to other profile ports.
+O próprio gateway encerra workers após cinco minutos ociosos. O botão manual existe para liberar memória imediatamente.
 
 ## Close controlled browsers
 
-The footer close button terminates only browsers listening on the app's known CDP ports. It closes the controlled CDP profiles without targeting the normal Google Chrome app.
-
-If the gateway is unavailable, the app falls back to the legacy direct process cleanup. That path is deliberately secondary because killing a Codex-owned stdio MCP process closes the transport that the current Codex thread is holding and can cause `Transport closed`.
+O botão de fechar solicita `SIGTERM` ao supervisor apenas para o processo identificado simultaneamente pelo diretório do perfil e pela porta CDP. A ação é recusada se houver lease ou chamada ativa, se a porta pertencer a outro processo ou se a identidade estiver ambígua. O Google Chrome normal permanece fora desse controle.
