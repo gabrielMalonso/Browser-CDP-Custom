@@ -11,7 +11,6 @@ struct SettingsView: View {
     @State private var mcpCleanupFeedback: String?
     @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
     @AppStorage(UserDefaultsKeys.linkRoutingMode) private var linkRoutingMode = LinkRoutingMode.askEveryTime.rawValue
-    @AppStorage(UserDefaultsKeys.mcpAutoCleanupEnabled) private var mcpAutoCleanupEnabled = false
 
     var body: some View {
         Form {
@@ -36,12 +35,8 @@ struct SettingsView: View {
             }
 
             Section("MCP") {
-                Toggle("Liberar workers ociosos", isOn: $mcpAutoCleanupEnabled)
-                    .onChange(of: mcpAutoCleanupEnabled) { _, _ in
-                        CDPProfileLauncher.shared.configureAutoCleanup()
-                    }
-
-                LabeledContent("Regra", value: "Gateway primeiro; kill direto só no fallback legado")
+                LabeledContent("Arquitetura", value: "1 gateway · workers sob demanda")
+                LabeledContent("Ociosidade", value: "Liberação automática após 5 minutos")
 
                 Button {
                     cleanIdleMCPClients()
@@ -102,7 +97,6 @@ struct SettingsView: View {
         .frame(width: 430, height: 500)
         .onAppear {
             refreshDefaultBrowserStatus()
-            CDPProfileLauncher.shared.configureAutoCleanup()
         }
     }
 
