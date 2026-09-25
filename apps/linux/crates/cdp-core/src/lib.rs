@@ -2,12 +2,14 @@ mod cdp;
 mod config;
 mod gateway;
 mod launcher;
+mod preferences;
 mod router;
 
 pub use cdp::{cdp_new_tab_url, CdpClient, CdpVersion};
 pub use config::{AppConfig, ProfileConfig};
 pub use gateway::{gateway_token, McpGatewayClient, McpGatewayStatus, McpWorker};
 pub use launcher::{BrowserLauncher, ProfileStatus};
+pub use preferences::{AppPreferences, LinkRoutingMode, NORMAL_BROWSER_DESTINATION};
 pub use router::{PendingLink, SharedRouter};
 
 pub type Result<T> = std::result::Result<T, Error>;

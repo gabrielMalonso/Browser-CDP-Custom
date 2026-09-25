@@ -1,6 +1,9 @@
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
-use std::{env, fs, path::PathBuf};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ProfileConfig {
@@ -127,13 +130,13 @@ pub fn default_pending_links_path() -> PathBuf {
         .join("browser-cdp-custom-linux/pending-links.json")
 }
 
-fn expand_tilde(path: &PathBuf) -> PathBuf {
+fn expand_tilde(path: &Path) -> PathBuf {
     let Some(raw) = path.to_str() else {
-        return path.clone();
+        return path.to_path_buf();
     };
 
     if raw == "~" {
-        return dirs::home_dir().unwrap_or_else(|| path.clone());
+        return dirs::home_dir().unwrap_or_else(|| path.to_path_buf());
     }
 
     if let Some(rest) = raw.strip_prefix("~/") {
@@ -142,7 +145,7 @@ fn expand_tilde(path: &PathBuf) -> PathBuf {
         }
     }
 
-    path.clone()
+    path.to_path_buf()
 }
 
 #[cfg(test)]
