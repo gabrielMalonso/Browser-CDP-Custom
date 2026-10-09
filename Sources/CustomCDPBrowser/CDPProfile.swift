@@ -8,17 +8,37 @@ struct CDPProfile: Identifiable, Hashable {
         case finance
     }
 
+    enum LaunchMode: Hashable {
+        case native
+        case cdp(port: Int)
+    }
+
     let id: String
     let name: String
     let profileRoot: String
     let profileDirectory: String
     let browserAppName: String
-    let port: Int
+    let launchMode: LaunchMode
     let defaultURL: String?
     let kind: Kind
 
-    var endpoint: URL {
-        URL(string: "http://127.0.0.1:\(port)/json/version")!
+    var isControlled: Bool {
+        if case .cdp = launchMode { return true }
+        return false
+    }
+
+    var displayName: String {
+        switch launchMode {
+        case .native: "\(name) · Chrome"
+        case .cdp(let port): "\(name) · porta \(port)"
+        }
+    }
+
+    var openedMessage: String {
+        switch launchMode {
+        case .native: "\(name) aberto no Chrome"
+        case .cdp(let port): "\(name) is ready on port \(port)"
+        }
     }
 
     var expandedProfileRoot: String {
@@ -70,10 +90,10 @@ struct CDPProfile: Identifiable, Hashable {
         CDPProfile(
             id: "pessoal",
             name: "Pessoal",
-            profileRoot: "~/.chrome-cdp/pessoal",
+            profileRoot: "~/Library/Application Support/Google/Chrome",
             profileDirectory: "Default",
             browserAppName: "Google Chrome",
-            port: 9224,
+            launchMode: .native,
             defaultURL: nil,
             kind: .personal
         ),
@@ -83,7 +103,7 @@ struct CDPProfile: Identifiable, Hashable {
             profileRoot: "~/.chrome-cdp/central-es",
             profileDirectory: "Default",
             browserAppName: "Helium",
-            port: 9222,
+            launchMode: .cdp(port: 9222),
             defaultURL: "https://web.whatsapp.com/",
             kind: .clinic
         ),
@@ -93,7 +113,7 @@ struct CDPProfile: Identifiable, Hashable {
             profileRoot: "~/.chrome-cdp/central-rj",
             profileDirectory: "Default",
             browserAppName: "Helium",
-            port: 9223,
+            launchMode: .cdp(port: 9223),
             defaultURL: "https://web.whatsapp.com/",
             kind: .clinic
         ),
@@ -103,7 +123,7 @@ struct CDPProfile: Identifiable, Hashable {
             profileRoot: "~/.chrome-cdp/financeiro-centralsp-helium",
             profileDirectory: "Profile 1",
             browserAppName: "Helium",
-            port: 9226,
+            launchMode: .cdp(port: 9226),
             defaultURL: "https://web.whatsapp.com/",
             kind: .finance
         ),
@@ -111,6 +131,10 @@ struct CDPProfile: Identifiable, Hashable {
 
     static var defaultProfile: CDPProfile {
         visibleProfiles[0]
+    }
+
+    static var controlledProfiles: [CDPProfile] {
+        visibleProfiles.filter(\.isControlled)
     }
 
     static func profile(withID id: String?) -> CDPProfile {

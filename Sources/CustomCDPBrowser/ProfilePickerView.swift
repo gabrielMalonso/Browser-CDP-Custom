@@ -84,7 +84,7 @@ struct ProfilePickerView: View {
                             browserDetail: launcher.profileDetailByID[profile.id],
                             mcpClientCount: launcher.mcpClientsByProfileID[profile.id]?.count ?? 0,
                             isOpening: openingProfileID == profile.id,
-                            isClosing: isClosingAll || closingProfileID == profile.id,
+                            isClosing: profile.isControlled && (isClosingAll || closingProfileID == profile.id),
                             isDisconnectingMCP: disconnectingMCPProfileID == profile.id,
                             allowsRunningSelection: hasPendingLinks,
                             isExpanded: expandedProfileID == profile.id
@@ -266,7 +266,7 @@ struct ProfilePickerView: View {
 
             switch result {
             case .success:
-                feedback = "\(profile.name) is ready on port \(profile.port)"
+                feedback = profile.openedMessage
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                     onDismiss()
                 }
@@ -463,7 +463,7 @@ struct ProfileRow: View {
     let onClose: () -> Void
 
     private var canSelect: Bool {
-        (!isRunning || allowsRunningSelection) && !isOpening && !isClosing && !isDisconnectingMCP
+        (!profile.isControlled || !isRunning || allowsRunningSelection) && !isOpening && !isClosing && !isDisconnectingMCP
     }
 
     var body: some View {
@@ -473,7 +473,7 @@ struct ProfileRow: View {
                     badge
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(profile.name) · porta \(profile.port)")
+                        Text(profile.displayName)
                             .font(.body.weight(isRunning ? .semibold : .regular))
                             .foregroundStyle(PanelTheme.textPrimary)
                     }
@@ -484,7 +484,7 @@ struct ProfileRow: View {
                 if isOpening || isClosing || isDisconnectingMCP {
                     ProgressView()
                         .controlSize(.small)
-                } else {
+                } else if profile.isControlled {
                     HStack(spacing: 8) {
                         if mcpClientCount > 0 {
                             Button(action: onDisconnectMCP) {
@@ -529,10 +529,15 @@ struct ProfileRow: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(isExpanded ? "Ocultar detalhes" : "Mostrar detalhes")
                     }
+                } else {
+                    Image(systemName: "arrow.up.forward.app")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(PanelTheme.textPrimary)
+                        .frame(width: 26, height: 26)
                 }
             }
 
-            if isExpanded {
+            if profile.isControlled && isExpanded {
                 ProfileDetails(
                     profile: profile,
                     isRunning: isRunning,

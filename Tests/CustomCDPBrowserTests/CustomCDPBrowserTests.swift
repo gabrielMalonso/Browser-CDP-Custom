@@ -24,13 +24,75 @@ final class CustomCDPBrowserTests: XCTestCase {
         XCTAssertEqual(CDPProfile.visibleProfiles.first?.id, "pessoal")
     }
 
-    func testPessoalUsesGoogleChromeOfficialApp() {
+    func testPessoalUsesNativeGoogleChromeDefaultProfile() {
         let profile = CDPProfile.profile(withID: "pessoal")
 
         XCTAssertEqual(profile.browserAppName, "Google Chrome")
-        XCTAssertEqual(profile.profileRoot, "~/.chrome-cdp/pessoal")
+        XCTAssertEqual(profile.profileRoot, "~/Library/Application Support/Google/Chrome")
         XCTAssertEqual(profile.profileDirectory, "Default")
-        XCTAssertEqual(profile.port, 9224)
+        XCTAssertEqual(profile.launchMode, .native)
+        XCTAssertFalse(profile.isControlled)
+        XCTAssertEqual(profile.displayName, "Pessoal · Chrome")
+    }
+
+    func testControlledProfilesExcludeNativePessoalAndPreserveCDPPorts() {
+        XCTAssertEqual(CDPProfile.controlledProfiles.map(\.id), ["central-es", "central-rj", "financeiro-centralsp"])
+        XCTAssertEqual(CDPProfile.controlledProfiles.map(\.launchMode), [.cdp(port: 9222), .cdp(port: 9223), .cdp(port: 9226)])
+    }
+
+    func testNativeChromeLaunchTargetsDefaultWithoutCustomRootOrCDP() {
+        let profile = CDPProfile.defaultProfile
+        let arguments = NativeBrowserLauncher.arguments(for: profile, url: nil)
+        XCTAssertEqual(arguments, ["-n", "-a", "Google Chrome", "--args", "--profile-directory=Default", "--new-window"])
+
+        let url = URL(string: "https://example.com/a?q=hello%20world&next=%2Fpage#section")!
+        let linkArguments = NativeBrowserLauncher.arguments(for: profile, url: url)
+        XCTAssertEqual(linkArguments, ["-n", "-a", "Google Chrome", "--args", "--profile-directory=Default", url.absoluteString])
+    }
+
+    @MainActor
+    func testNativeOpeningAndLinkRoutingWorkWithoutSupervisor() async throws {
+        var openedProfiles: [CDPProfile] = []
+        var openedURLs: [URL?] = []
+        let launcher = CDPProfileLauncher(
+            gateway: MCPGatewayClient(baseURL: URL(string: "http://127.0.0.1:1")!, tokenProvider: { nil }),
+            nativeOpener: { profile, url in
+                openedProfiles.append(profile)
+                openedURLs.append(url)
+            }
+        )
+        let openResult: Result<Void, Error> = await withCheckedContinuation { continuation in
+            launcher.open(CDPProfile.defaultProfile) { continuation.resume(returning: $0) }
+        }
+        try openResult.get()
+        let url = URL(string: "https://example.com/native?test=1#section")!
+        let router = LinkRouter(launcher: launcher, userDefaults: UserDefaults(suiteName: "CustomCDPBrowserTests-\(UUID().uuidString)")!)
+        let routeResult: Result<Void, Error> = await withCheckedContinuation { continuation in
+            router.route([url], to: CDPProfile.defaultProfile) { continuation.resume(returning: $0) }
+        }
+        try routeResult.get()
+        XCTAssertEqual(openedProfiles, [CDPProfile.defaultProfile, CDPProfile.defaultProfile])
+        XCTAssertEqual(openedURLs, [nil, url])
+        XCTAssertFalse(launcher.gatewayAvailable)
+    }
+
+    @MainActor
+    func testNativeProfileCannotBeClosedOrHaveWorkersReleased() {
+        let launcher = CDPProfileLauncher()
+        var closeRejected = false
+        launcher.close(CDPProfile.defaultProfile) { result in
+            if case .failure(let error) = result, case .profileNotControlled = error as? LauncherError {
+                closeRejected = true
+            }
+        }
+        var releaseRejected = false
+        launcher.disconnectMCPClients(for: CDPProfile.defaultProfile) { result in
+            if case .failure(let error) = result, case .profileNotControlled = error as? LauncherError {
+                releaseRejected = true
+            }
+        }
+        XCTAssertTrue(closeRejected)
+        XCTAssertTrue(releaseRejected)
     }
 
     func testNormalGoogleChromeDetectionExcludesCDPAndHelperProcesses() {

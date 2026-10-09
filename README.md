@@ -2,7 +2,7 @@
 
 Painel macOS e roteador de links para os perfis Chrome e Helium persistentes do Gabriel.
 
-O app não controla processos ou locks diretamente. Ele usa o supervisor local em `127.0.0.1:8787` como autoridade única para iniciar, consultar, abrir URLs, liberar workers e encerrar perfis.
+Os perfis CDP usam o supervisor local em `127.0.0.1:8787` como autoridade única para iniciar, consultar, abrir URLs, liberar workers e encerrar perfis. O Pessoal abre diretamente o `Default` nativo do Chrome, sem depender do supervisor.
 
 ## Linux app
 
@@ -12,12 +12,14 @@ A implementação Linux fica em `apps/linux`, usando Rust/Tauri/Svelte e a mesma
 
 | Name | Browser | Profile root | Profile directory | Port | Default URL |
 |---|---|---|---|---:|---|
-| Pessoal | Google Chrome | `~/.chrome-cdp/pessoal` | `Default` | `9224` | none |
+| Pessoal | Google Chrome | `~/Library/Application Support/Google/Chrome` | `Default` | — (nativo) | none |
 | Central ES | Helium | `~/.chrome-cdp/central-es` | `Default` | `9222` | WhatsApp Web |
 | Central RJ | Helium | `~/.chrome-cdp/central-rj` | `Default` | `9223` | WhatsApp Web |
 | Financeiro/CentralSP | Helium | `~/.chrome-cdp/financeiro-centralsp-helium` | `Profile 1` | `9226` | WhatsApp Web |
 
 The launcher also includes a **Google Chrome normal** action below the CDP profiles. It opens or activates the regular Chrome app without `--user-data-dir`, so Chrome's own profile picker and non-CDP profiles stay available even while the controlled CDP Chrome is running.
+
+**Pessoal · Chrome** abre uma janela do perfil `Default` com `--profile-directory=Default`, sem `--user-data-dir` nem porta CDP. Links destinados ao Pessoal também abrem nesse perfil, mesmo que outro perfil nativo esteja aberto. Esse botão não oferece controles de fechar browser, liberar worker ou detalhes CDP; as ações coletivas do supervisor incluem somente os três perfis Helium. O botão **Google Chrome** continua sendo a abertura genérica do app.
 
 ## Development
 
@@ -61,10 +63,10 @@ The **Open links:** setting controls links opened from outside the app:
 | Mode | Behavior |
 |---|---|
 | Always Ask | Shows the overlay for every incoming link and lets you pick a profile. |
-| Pessoal | Opens incoming links directly in the Pessoal CDP profile. |
+| Pessoal | Opens incoming links directly in Chrome's native Default profile. |
 | Last Selected | Opens incoming links in the last profile selected from the launcher, falling back to Pessoal. |
 
-Links recebidos são enviados ao endpoint autenticado do supervisor. O supervisor garante que o perfil esteja pronto e abre a nova aba sob uma lease exclusiva curta.
+Links destinados aos perfis CDP são enviados ao endpoint autenticado do supervisor, que garante que o perfil esteja pronto e abre a nova aba sob uma lease exclusiva curta. Links destinados ao Pessoal são entregues diretamente ao Chrome nativo com o perfil `Default` explícito.
 
 ## Gateway MCP/CDP
 

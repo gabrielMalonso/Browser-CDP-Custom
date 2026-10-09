@@ -215,8 +215,19 @@ final class CDPProfileLauncher: ObservableObject {
     @Published private(set) var gatewayAvailable = false
     @Published private(set) var mcpAutoCleanupFeedback: String?
 
-    private let gateway = MCPGatewayClient()
+    private let gateway: MCPGatewayClient
+    private let nativeOpener: (CDPProfile, URL?) throws -> Void
     private var refreshGeneration = 0
+
+    init(
+        gateway: MCPGatewayClient = MCPGatewayClient(),
+        nativeOpener: @escaping (CDPProfile, URL?) throws -> Void = { profile, url in
+            try NativeBrowserLauncher.open(profile, url: url)
+        }
+    ) {
+        self.gateway = gateway
+        self.nativeOpener = nativeOpener
+    }
 
     func refreshStatuses() {
         refreshGeneration += 1
@@ -224,7 +235,8 @@ final class CDPProfileLauncher: ObservableObject {
 
         Task {
             do {
-                let statuses = try await gateway.profiles()
+                let controlledIDs = Set(CDPProfile.controlledProfiles.map(\.id))
+                let statuses = try await gateway.profiles().filter { controlledIDs.contains($0.id) }
                 guard refreshGeneration == generation else { return }
                 runningProfileIDs = Set(statuses.filter { $0.browser.state == "ready" }.map(\.id))
                 profileStateByID = Dictionary(uniqueKeysWithValues: statuses.map { ($0.id, $0.browser.state) })
@@ -258,7 +270,13 @@ final class CDPProfileLauncher: ObservableObject {
     func ensureRunning(_ profile: CDPProfile, initialURL: URL?, completion: @escaping (Result<Void, Error>) -> Void) {
         Task {
             do {
-                if let targetURL = initialURL ?? profile.defaultURL.flatMap(URL.init(string:)) {
+                let targetURL = initialURL ?? profile.defaultURL.flatMap(URL.init(string:))
+                if !profile.isControlled {
+                    try nativeOpener(profile, targetURL)
+                    completion(.success(()))
+                    return
+                }
+                if let targetURL {
                     try await gateway.openURL(targetURL, in: profile)
                 } else {
                     try await gateway.start(profile: profile)
@@ -266,26 +284,21 @@ final class CDPProfileLauncher: ObservableObject {
                 refreshStatuses()
                 completion(.success(()))
             } catch {
-                refreshStatuses()
+                if profile.isControlled { refreshStatuses() }
                 completion(.failure(error))
             }
         }
     }
 
     func openURL(_ url: URL, in profile: CDPProfile, completion: @escaping (Result<Void, Error>) -> Void) {
-        Task {
-            do {
-                try await gateway.openURL(url, in: profile)
-                refreshStatuses()
-                completion(.success(()))
-            } catch {
-                refreshStatuses()
-                completion(.failure(error))
-            }
-        }
+        ensureRunning(profile, initialURL: url, completion: completion)
     }
 
     func close(_ profile: CDPProfile, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard profile.isControlled else {
+            completion(.failure(LauncherError.profileNotControlled))
+            return
+        }
         Task {
             do {
                 _ = try await gateway.stop(profile: profile)
@@ -302,7 +315,7 @@ final class CDPProfileLauncher: ObservableObject {
         Task {
             do {
                 var closed = 0
-                for profile in CDPProfile.visibleProfiles {
+                for profile in CDPProfile.controlledProfiles {
                     if try await gateway.stop(profile: profile) { closed += 1 }
                 }
                 refreshStatuses()
@@ -315,6 +328,10 @@ final class CDPProfileLauncher: ObservableObject {
     }
 
     func disconnectMCPClients(for profile: CDPProfile, completion: @escaping (Result<Int, Error>) -> Void) {
+        guard profile.isControlled else {
+            completion(.failure(LauncherError.profileNotControlled))
+            return
+        }
         Task {
             do {
                 let released = try await gateway.release(profile: profile)
@@ -331,7 +348,7 @@ final class CDPProfileLauncher: ObservableObject {
         Task {
             do {
                 var released = 0
-                for profile in CDPProfile.visibleProfiles where try await gateway.release(profile: profile) {
+                for profile in CDPProfile.controlledProfiles where try await gateway.release(profile: profile) {
                     released += 1
                 }
                 mcpAutoCleanupFeedback = "Workers ociosos liberados pelo supervisor."
@@ -355,13 +372,7 @@ final class CDPProfileLauncher: ObservableObject {
                     return
                 }
 
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-                process.arguments = ["-n", "-a", "Google Chrome"]
-                process.standardError = Pipe()
-                try process.run()
-                process.waitUntilExit()
-                guard process.terminationStatus == 0 else { throw LauncherError.normalChromeOpenFailed }
+                try NativeBrowserLauncher.run(arguments: ["-n", "-a", "Google Chrome"])
                 completion(.success(()))
             } catch {
                 completion(.failure(error))
@@ -370,9 +381,37 @@ final class CDPProfileLauncher: ObservableObject {
     }
 }
 
+enum NativeBrowserLauncher {
+    static func arguments(for profile: CDPProfile, url: URL?) -> [String] {
+        var arguments = ["-n", "-a", profile.browserAppName, "--args", "--profile-directory=\(profile.profileDirectory)"]
+        // Target the requested profile even when Chrome already has another profile open.
+        if let url {
+            arguments.append(url.absoluteString)
+        } else {
+            arguments.append("--new-window")
+        }
+        return arguments
+    }
+
+    static func open(_ profile: CDPProfile, url: URL?) throws {
+        try run(arguments: arguments(for: profile, url: url))
+    }
+
+    static func run(arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = arguments
+        process.standardError = Pipe()
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw LauncherError.normalChromeOpenFailed }
+    }
+}
+
 enum LauncherError: LocalizedError {
     case processLookupFailed
     case normalChromeOpenFailed
+    case profileNotControlled
 
     var errorDescription: String? {
         switch self {
@@ -380,6 +419,8 @@ enum LauncherError: LocalizedError {
             "Não foi possível inspecionar os processos do Google Chrome."
         case .normalChromeOpenFailed:
             "Não foi possível abrir o Google Chrome normal."
+        case .profileNotControlled:
+            "O perfil nativo do Chrome não é controlado pelo supervisor."
         }
     }
 }
