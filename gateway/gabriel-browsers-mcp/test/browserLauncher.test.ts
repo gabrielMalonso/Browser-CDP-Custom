@@ -1,4 +1,6 @@
 import { mkdtemp, mkdir, lstat, symlink, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -56,6 +58,50 @@ describe("browser launcher safety", () => {
     await expect(removeVerifiedStaleLocks(otherProfile)).rejects.toThrow("formato inesperado");
   });
 
+  it("recovers an orphaned Unix socket left by a terminated browser", async () => {
+    const root = await temporaryRoot();
+    const socketPath = path.join(root, "orphan.sock");
+    execFileSync(process.execPath, ["-e", `
+      require('node:net').createServer().listen(process.argv[1], () => process.exit(0));
+    `, socketPath]);
+    expect((await lstat(socketPath)).isSocket()).toBe(true);
+    await symlink(socketPath, path.join(root, "SingletonSocket"));
+    await symlink(`host-${process.pid + 10_000_000}`, path.join(root, "SingletonLock"));
+
+    await removeVerifiedStaleLocks(fixtureProfile(root));
+
+    await expect(lstat(path.join(root, "SingletonSocket"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await lstat(socketPath)).isSocket()).toBe(true);
+  });
+
+  it("preserves every lock when a Unix socket still accepts connections", async () => {
+    const root = await temporaryRoot();
+    const socketPath = path.join(root, "active.sock");
+    const server = createServer((socket) => socket.end());
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(socketPath, resolve);
+    });
+    try {
+      await symlink(`host-${process.pid + 10_000_000}`, path.join(root, "SingletonLock"));
+      // Chromium can also use relative targets; resolve them from the lock directory.
+      await symlink("active.sock", path.join(root, "SingletonSocket"));
+      await expect(removeVerifiedStaleLocks(fixtureProfile(root))).rejects.toThrow("ainda está ativo");
+      expect((await lstat(path.join(root, "SingletonLock"))).isSymbolicLink()).toBe(true);
+      expect((await lstat(path.join(root, "SingletonSocket"))).isSymbolicLink()).toBe(true);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it("preserves a socket link pointing to a regular file", async () => {
+    const root = await temporaryRoot();
+    await writeFile(path.join(root, "unexpected"), "not a socket");
+    await symlink("unexpected", path.join(root, "SingletonSocket"));
+    await expect(removeVerifiedStaleLocks(fixtureProfile(root))).rejects.toThrow("caminho existente");
+    expect((await lstat(path.join(root, "SingletonSocket"))).isSymbolicLink()).toBe(true);
+  });
+
   it("recovers the graphical Linux environment without overriding configured values", () => {
     const recovered = linuxBrowserEnvironment(
       {},
@@ -76,7 +122,7 @@ describe("browser launcher safety", () => {
 });
 
 async function temporaryRoot(): Promise<string> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "gabriel-browser-test-"));
+  const directory = await mkdtemp(path.join(process.platform === "darwin" ? "/tmp" : os.tmpdir(), "gabriel-browser-test-"));
   temporaryDirectories.push(directory);
   return directory;
 }

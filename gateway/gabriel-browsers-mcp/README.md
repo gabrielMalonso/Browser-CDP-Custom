@@ -19,6 +19,8 @@ O gateway pai fica leve e permanente. Um worker `@playwright/mcp` só nasce na p
 - Leases `read` permitem leituras simultâneas; uma lease `write` é exclusiva por perfil.
 - Abas abertas pela automação são registradas. A API só fecha targets registrados como pertencentes à automação.
 - Perfil degradado, porta ocupada ou identidade ambígua falham de forma fechada.
+- Fechar usa `Browser.close` e aguarda também a saída dos processos. Sem CDP, o fallback sinaliza apenas o processo principal; não interrompe todos os helpers juntos.
+- Um `SingletonSocket` existente só bloqueia como ativo se aceitar conexão. Conexão recusada permite recuperar links obsoletos após verificar ausência de processos e revalidar os locks; timeout e erros ambíguos continuam bloqueando.
 
 ## MCP
 

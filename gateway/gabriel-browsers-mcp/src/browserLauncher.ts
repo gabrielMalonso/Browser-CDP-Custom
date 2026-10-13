@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { lstat, readlink, stat, unlink } from "node:fs/promises";
+import { createConnection } from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -120,21 +121,51 @@ export async function stopBrowser(profile: BrowserProfile, force = false): Promi
     );
   }
 
-  for (const pid of status.processIds) safeKill(pid, "SIGTERM");
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    if (!(await isCdpAlive(profile, 500))) return true;
-    await delay(500);
+  if (status.cdpAlive) {
+    // Browser.close lets Chromium flush the profile and release its singleton socket.
+    // Signalling every helper at once interrupts that shutdown on macOS.
+    try {
+      const response = await fetchWithTimeout(profileJsonVersionUrl(profile), { method: "GET" }, 1500);
+      const version: unknown = await response.json();
+      if (!response.ok || typeof version !== "object" || version === null ||
+          !("webSocketDebuggerUrl" in version) || typeof version.webSocketDebuggerUrl !== "string") {
+        throw new Error("O endpoint CDP não informou o WebSocket do navegador.");
+      }
+      await sendTargetCommand(version.webSocketDebuggerUrl, "Browser.close", {}, 2000, true);
+    } catch {
+      // The browser can disconnect before acknowledging Browser.close. Its exit,
+      // rather than the command response, decides whether shutdown succeeded.
+    }
+  } else {
+    const processes = await processSnapshots();
+    for (const process of processes) {
+      if (status.processIds.includes(process.pid) && !process.command.includes("--type=")) {
+        safeKill(process.pid, "SIGTERM");
+      }
+    }
   }
+  if (await waitForBrowserToStop(profile)) return true;
 
   if (force) {
-    for (const pid of status.processIds) safeKill(pid, "SIGKILL");
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      if (!(await isCdpAlive(profile, 500))) return true;
-      await delay(500);
-    }
+    const current = await inspectBrowser(profile);
+    if (current.state === "blocked") throw statusError(profile, current);
+    for (const pid of current.processIds) safeKill(pid, "SIGKILL");
+    if (await waitForBrowserToStop(profile)) return true;
   }
 
   throw supervisorError(`O navegador ${profile.id} não encerrou.`, 409, "browser_stop_failed");
+}
+
+async function waitForBrowserToStop(profile: BrowserProfile): Promise<boolean> {
+  const deadline = Date.now() + 5000;
+  do {
+    const status = await inspectBrowser(profile);
+    const rootFlag = `--user-data-dir=${expandHome(profile.profileRoot)}`;
+    const processes = await processSnapshots();
+    if (status.state === "stopped" && !processes.some((process) => process.command.includes(rootFlag))) return true;
+    await delay(250);
+  } while (Date.now() < deadline);
+  return false;
 }
 
 export async function listTargets(profile: BrowserProfile, timeoutMs = 1500): Promise<CDPTarget[]> {
@@ -224,7 +255,7 @@ export async function removeVerifiedStaleLocks(profile: BrowserProfile): Promise
   const root = expandHome(profile.profileRoot);
   const profileDirectory = path.join(root, profile.profileDirectory);
   const lockPaths = [...new Set(lockNames.flatMap((name) => [path.join(root, name), path.join(profileDirectory, name)]))];
-  const staleLocks: string[] = [];
+  const staleLocks: Array<{ lockPath: string; target: string; dev: number; ino: number; mtimeMs: number }> = [];
 
   for (const lockPath of lockPaths) {
     let metadata;
@@ -247,22 +278,63 @@ export async function removeVerifiedStaleLocks(profile: BrowserProfile): Promise
       }
     }
     if (path.basename(lockPath) === "SingletonSocket") {
-      try {
-        const socket = await stat(target);
-        if (socket.isSocket()) {
-          throw supervisorError(`SingletonSocket ainda está ativo: ${target}`, 409, "profile_in_use");
-        }
-        throw supervisorError(`SingletonSocket aponta para um caminho existente: ${target}`, 409, "profile_lock_ambiguous");
-      } catch (error) {
-        if (!isMissing(error)) throw error;
-      }
+      await assertSocketInactive(path.resolve(path.dirname(lockPath), target));
     }
-    staleLocks.push(lockPath);
+    staleLocks.push({ lockPath, target, dev: metadata.dev, ino: metadata.ino, mtimeMs: metadata.mtimeMs });
   }
 
   const status = await inspectBrowser(profile);
   if (status.state !== "stopped") throw statusError(profile, status);
-  await Promise.all(staleLocks.map((lockPath) => unlink(lockPath)));
+  const rootFlag = `--user-data-dir=${root}`;
+  if ((await processSnapshots()).some((process) => process.command.includes(rootFlag))) {
+    throw supervisorError(`Ainda existe um processo usando ${profile.id}.`, 409, "profile_in_use");
+  }
+  // Recheck the entire set before removing anything; a lock changing while the
+  // profile is inspected means another launch may be in progress.
+  for (const lock of staleLocks) {
+    const current = await lstat(lock.lockPath);
+    if (!current.isSymbolicLink() || current.dev !== lock.dev || current.ino !== lock.ino ||
+        current.mtimeMs !== lock.mtimeMs || await readlink(lock.lockPath) !== lock.target) {
+      throw supervisorError(`Lock mudou durante a validação: ${lock.lockPath}`, 409, "profile_lock_ambiguous");
+    }
+    if (path.basename(lock.lockPath) === "SingletonSocket") {
+      await assertSocketInactive(path.resolve(path.dirname(lock.lockPath), lock.target));
+    }
+    if (path.basename(lock.lockPath) === "SingletonLock") {
+      const pid = Number(lock.target.match(/-(\d+)$/)?.[1]);
+      if (isProcessAlive(pid)) throw supervisorError(`SingletonLock aponta para o PID ativo ${pid}.`, 409, "profile_in_use");
+    }
+  }
+  await Promise.all(staleLocks.map(({ lockPath }) => unlink(lockPath)));
+}
+
+async function assertSocketInactive(target: string): Promise<void> {
+  try {
+    if (!(await stat(target)).isSocket()) {
+      throw supervisorError(`SingletonSocket aponta para um caminho existente: ${target}`, 409, "profile_lock_ambiguous");
+    }
+  } catch (error) {
+    if (isMissing(error)) return;
+    throw error;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const socket = createConnection({ path: target });
+    const finish = (error?: Error) => {
+      socket.destroy();
+      if (error) reject(error);
+      else resolve();
+    };
+    socket.setTimeout(800, () => finish(supervisorError(
+      `Não foi possível verificar o SingletonSocket: ${target}`, 409, "profile_lock_ambiguous",
+    )));
+    socket.once("connect", () => finish(supervisorError(
+      `SingletonSocket ainda está ativo: ${target}`, 409, "profile_in_use",
+    )));
+    socket.once("error", (error: NodeJS.ErrnoException) => {
+      if (error.code === "ECONNREFUSED" || error.code === "ENOENT") finish();
+      else finish(supervisorError(`Não foi possível verificar o SingletonSocket: ${target}`, 409, "profile_lock_ambiguous"));
+    });
+  });
 }
 
 async function launchBrowser(profile: BrowserProfile): Promise<void> {
@@ -321,7 +393,7 @@ async function processSnapshots(): Promise<ProcessSnapshot[]> {
   try {
     return parseProcessSnapshots(await runFile("/bin/ps", ["-axo", "pid=,command="]));
   } catch {
-    return [];
+    throw supervisorError("Não foi possível inspecionar os processos do navegador.", 503, "process_inspection_failed");
   }
 }
 
@@ -374,14 +446,19 @@ async function sendTargetCommand(
   method: string,
   params: Record<string, unknown>,
   timeoutMs: number,
+  acceptDisconnect = false,
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const socket = new WebSocket(webSocketUrl);
+    let sent = false;
+    let settled = false;
     const timer = setTimeout(() => {
       socket.close();
       reject(supervisorError(`${method} excedeu ${timeoutMs} ms.`, 504, "target_command_timeout"));
     }, timeoutMs);
     const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       socket.close();
       if (error) reject(error);
@@ -389,6 +466,7 @@ async function sendTargetCommand(
     };
     socket.addEventListener("open", () => {
       socket.send(JSON.stringify({ id: 1, method, params }));
+      sent = true;
     });
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(String(event.data)) as { id?: number; error?: { message?: string } };
@@ -402,6 +480,9 @@ async function sendTargetCommand(
     socket.addEventListener("error", () => {
       finish(supervisorError(`WebSocket do target falhou durante ${method}.`, 502, "target_websocket_failed"));
     });
+    socket.addEventListener("close", () => {
+      if (acceptDisconnect && sent) finish();
+    });
   });
 }
 
@@ -409,8 +490,9 @@ function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ESRCH") return false;
+    throw supervisorError(`Não foi possível verificar o PID ${pid}.`, 409, "profile_lock_ambiguous");
   }
 }
 

@@ -106,4 +106,6 @@ O próprio gateway encerra workers após cinco minutos ociosos. O botão manual 
 
 ## Close controlled browsers
 
-O botão de fechar solicita `SIGTERM` ao supervisor apenas para o processo identificado simultaneamente pelo diretório do perfil e pela porta CDP. A ação é recusada se houver lease ou chamada ativa, se a porta pertencer a outro processo ou se a identidade estiver ambígua. O Google Chrome normal permanece fora desse controle.
+O botão de fechar pede ao supervisor o encerramento normal via `Browser.close`, para o navegador salvar o perfil e liberar o socket. O supervisor aguarda a saída dos processos, além da queda do CDP. Se o CDP já estiver indisponível, `SIGTERM` é enviado somente ao processo principal identificado; os helpers não são interrompidos em conjunto. A ação é recusada se houver lease ou chamada ativa, se a porta pertencer a outro processo ou se a identidade estiver ambígua. O Google Chrome normal permanece fora desse controle.
+
+Na próxima abertura, sockets abandonados só são tratados como obsoletos quando recusam conexão e não há processo usando o perfil. Sockets ativos, erros de verificação e locks que mudam durante a inspeção bloqueiam a abertura.

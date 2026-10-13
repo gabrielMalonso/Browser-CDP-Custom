@@ -173,7 +173,8 @@ struct MCPGatewayClient {
 
         var request = URLRequest(url: url(for: path))
         request.httpMethod = method
-        request.timeoutInterval = 15
+        // A close request waits for the browser process to exit and flush its profile.
+        request.timeoutInterval = path.hasSuffix("/stop") ? 30 : 15
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
