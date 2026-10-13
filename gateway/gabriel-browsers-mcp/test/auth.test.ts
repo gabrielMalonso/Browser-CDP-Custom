@@ -1,52 +1,18 @@
-import { describe, expect, test } from "vitest";
-import { validateLoopbackHost } from "../src/auth.js";
+import { describe, expect, it } from "vitest";
+import { hasBearerToken, isLoopbackHost } from "../src/auth.js";
+import type { IncomingMessage } from "node:http";
 
-function response() {
-  return {
-    statusCode: 200,
-    body: undefined as unknown,
-    status(code: number) {
-      this.statusCode = code;
-      return this;
-    },
-    json(payload: unknown) {
-      this.body = payload;
-      return this;
-    }
-  };
-}
-
-describe("validateLoopbackHost", () => {
-  test("accepts 127.0.0.1", () => {
-    const res = response();
-    let called = false;
-
-    validateLoopbackHost(
-      { headers: { host: "127.0.0.1:8787" } } as never,
-      res as never,
-      (() => {
-        called = true;
-      }) as never
-    );
-
-    expect(called).toBe(true);
-    expect(res.statusCode).toBe(200);
+describe("auth", () => {
+  it("accepts only loopback host headers", () => {
+    expect(isLoopbackHost("127.0.0.1:8787", 8787)).toBe(true);
+    expect(isLoopbackHost("localhost:8787", 8787)).toBe(true);
+    expect(isLoopbackHost("[::1]:8787", 8787)).toBe(true);
+    expect(isLoopbackHost("example.com:8787", 8787)).toBe(false);
   });
 
-  test("rejects non-loopback hosts", () => {
-    const res = response();
-    let called = false;
-
-    validateLoopbackHost(
-      { headers: { host: "example.com" } } as never,
-      res as never,
-      (() => {
-        called = true;
-      }) as never
-    );
-
-    expect(called).toBe(false);
-    expect(res.statusCode).toBe(403);
-    expect(res.body).toEqual({ error: "host_not_allowed" });
+  it("requires the bearer token exactly", () => {
+    const request = { headers: { authorization: "Bearer secret" } } as IncomingMessage;
+    expect(hasBearerToken(request, "secret")).toBe(true);
+    expect(hasBearerToken(request, "other")).toBe(false);
   });
 });

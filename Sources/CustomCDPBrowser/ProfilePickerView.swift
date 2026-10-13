@@ -80,9 +80,11 @@ struct ProfilePickerView: View {
                         ProfileRow(
                             profile: profile,
                             isRunning: launcher.runningProfileIDs.contains(profile.id),
+                            browserState: launcher.profileStateByID[profile.id] ?? "unknown",
+                            browserDetail: launcher.profileDetailByID[profile.id],
                             mcpClientCount: launcher.mcpClientsByProfileID[profile.id]?.count ?? 0,
                             isOpening: openingProfileID == profile.id,
-                            isClosing: isClosingAll || closingProfileID == profile.id,
+                            isClosing: profile.isControlled && (isClosingAll || closingProfileID == profile.id),
                             isDisconnectingMCP: disconnectingMCPProfileID == profile.id,
                             allowsRunningSelection: hasPendingLinks,
                             isExpanded: expandedProfileID == profile.id
@@ -170,7 +172,7 @@ struct ProfilePickerView: View {
     private var footer: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("MCP RAM · \(mcpMemorySummary)")
+                Text("Supervisor · \(launcher.gatewayAvailable ? "online" : "offline") · \(activeWorkerCount) worker\(activeWorkerCount == 1 ? "" : "s")")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(PanelTheme.textPrimary)
                     .monospacedDigit()
@@ -221,11 +223,8 @@ struct ProfilePickerView: View {
         .padding(.vertical, 10)
     }
 
-    private var mcpMemorySummary: String {
-        let bytes = Int64(launcher.mcpResidentMemoryKilobytes) * 1024
-        guard bytes > 0 else { return "0 MB" }
-
-        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .memory)
+    private var activeWorkerCount: Int {
+        launcher.mcpClientsByProfileID.values.reduce(0) { $0 + $1.count }
     }
 
     private func footerButtonLabel(title: String, icon: String) -> some View {
@@ -267,7 +266,7 @@ struct ProfilePickerView: View {
 
             switch result {
             case .success:
-                feedback = "\(profile.name) is ready on port \(profile.port)"
+                feedback = profile.openedMessage
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                     onDismiss()
                 }
@@ -450,6 +449,8 @@ private struct NormalChromeRow: View {
 struct ProfileRow: View {
     let profile: CDPProfile
     let isRunning: Bool
+    let browserState: String
+    let browserDetail: String?
     let mcpClientCount: Int
     let isOpening: Bool
     let isClosing: Bool
@@ -462,7 +463,7 @@ struct ProfileRow: View {
     let onClose: () -> Void
 
     private var canSelect: Bool {
-        (!isRunning || allowsRunningSelection) && !isOpening && !isClosing && !isDisconnectingMCP
+        (!profile.isControlled || !isRunning || allowsRunningSelection) && !isOpening && !isClosing && !isDisconnectingMCP
     }
 
     var body: some View {
@@ -472,7 +473,7 @@ struct ProfileRow: View {
                     badge
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(profile.name) · porta \(profile.port)")
+                        Text(profile.displayName)
                             .font(.body.weight(isRunning ? .semibold : .regular))
                             .foregroundStyle(PanelTheme.textPrimary)
                     }
@@ -483,7 +484,7 @@ struct ProfileRow: View {
                 if isOpening || isClosing || isDisconnectingMCP {
                     ProgressView()
                         .controlSize(.small)
-                } else {
+                } else if profile.isControlled {
                     HStack(spacing: 8) {
                         if mcpClientCount > 0 {
                             Button(action: onDisconnectMCP) {
@@ -528,13 +529,20 @@ struct ProfileRow: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(isExpanded ? "Ocultar detalhes" : "Mostrar detalhes")
                     }
+                } else {
+                    Image(systemName: "arrow.up.forward.app")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(PanelTheme.textPrimary)
+                        .frame(width: 26, height: 26)
                 }
             }
 
-            if isExpanded {
+            if profile.isControlled && isExpanded {
                 ProfileDetails(
                     profile: profile,
                     isRunning: isRunning,
+                    browserState: browserState,
+                    browserDetail: browserDetail,
                     mcpClientCount: mcpClientCount
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -589,6 +597,8 @@ struct ProfileRow: View {
 private struct ProfileDetails: View {
     let profile: CDPProfile
     let isRunning: Bool
+    let browserState: String
+    let browserDetail: String?
     let mcpClientCount: Int
 
     var body: some View {
@@ -603,13 +613,28 @@ private struct ProfileDetails: View {
             detailRow(
                 icon: "power",
                 label: "Status",
-                value: isRunning ? "Rodando" : "Disponível"
+                value: statusLabel
             )
+            if let browserDetail {
+                detailRow(icon: "exclamationmark.triangle", label: "Detalhe", value: browserDetail)
+            }
         }
         .font(.caption)
         .foregroundStyle(PanelTheme.textMuted)
         .padding(.leading, 2)
         .padding(.top, 2)
+    }
+
+    private var statusLabel: String {
+        switch browserState {
+        case "ready": "Rodando"
+        case "stopped": "Disponível"
+        case "degraded": "CDP degradado"
+        case "blocked": "Porta bloqueada"
+        case "starting": "Iniciando"
+        case "stopping": "Encerrando"
+        default: "Supervisor indisponível"
+        }
     }
 
     private func detailRow(icon: String, label: String, value: String) -> some View {

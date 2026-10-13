@@ -1,29 +1,27 @@
-import type { Request, Response, NextFunction } from "express";
+import type { IncomingMessage } from "node:http";
 
-export function validateLoopbackHost(req: Request, res: Response, next: NextFunction) {
-  const rawHost = req.headers.host ?? "";
-  const host = rawHost.split(":")[0]?.replace(/^\[(.*)\]$/, "$1");
+const allowedHosts = new Set(["127.0.0.1", "localhost"]);
 
-  if (host !== "127.0.0.1") {
-    res.status(403).json({ error: "host_not_allowed" });
-    return;
-  }
-
-  next();
+export function isLoopbackHost(hostHeader: string | undefined, port: number): boolean {
+  if (!hostHeader) return false;
+  const host = port === 0 ? hostHeader.replace(/:\d+$/, "") : hostHeader.replace(new RegExp(`:${port}$`), "");
+  return allowedHosts.has(host) || host === `[::1]`;
 }
 
-export function requireBearerToken(token: string | null) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!token) {
-      res.status(503).json({ error: "gateway_token_missing" });
-      return;
-    }
+export function hasBearerToken(request: IncomingMessage, token: string): boolean {
+  const authorization = request.headers.authorization;
+  return authorization === `Bearer ${token}`;
+}
 
-    if (req.headers.authorization !== `Bearer ${token}`) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
+export function assertLocalRequest(request: IncomingMessage, port: number): void {
+  if (!isLoopbackHost(request.headers.host, port)) {
+    throw Object.assign(new Error("Host não autorizado para o gateway MCP."), { statusCode: 403 });
+  }
+}
 
-    next();
-  };
+export function assertAuthorizedRequest(request: IncomingMessage, port: number, token: string): void {
+  assertLocalRequest(request, port);
+  if (!hasBearerToken(request, token)) {
+    throw Object.assign(new Error("Bearer token ausente ou inválido."), { statusCode: 401 });
+  }
 }

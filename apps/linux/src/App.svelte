@@ -25,15 +25,12 @@
   };
 
   type McpWorker = {
-    profile: string;
-    port: number;
+    profileId: string;
     pid: number | null;
-    residentMemoryKilobytes: number;
-    activeCalls: number;
-    createdAt: string;
-    lastUsedAt: string;
+    callsInFlight: number;
+    leaseCount: number;
     idleMs: number;
-    lastError: string | null;
+    closing: boolean;
   };
 
   type McpGatewayStatus = {
@@ -125,28 +122,23 @@
     profile.browser_command ?? "Chrome/Chromium automático";
 
   const mcpWorkersForProfile = (profileId: string) =>
-    mcpStatus.workers.filter((worker) => worker.profile === profileId);
+    mcpStatus.workers.filter((worker) => worker.profileId === profileId);
 
   const mcpWorkerLabel = (profileId: string) => {
     const workers = mcpWorkersForProfile(profileId);
     if (workers.length === 0) return "Sem workers ativos";
 
     return workers
-      .map((worker) => `PID ${worker.pid ?? "?"} · ${formatMemory(worker.residentMemoryKilobytes)}`)
+      .map((worker) => `PID ${worker.pid ?? "?"} · ${worker.callsInFlight} chamada(s) ativa(s)`)
       .join(", ");
   };
 
-  const formatMemory = (kilobytes: number) => {
-    const megabytes = (kilobytes * 1024) / 1_000_000;
-    return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(megabytes)} MB`;
-  };
-
   const mcpMemorySummary = () => {
-    const totalKilobytes = mcpStatus.workers.reduce(
-      (sum, worker) => sum + worker.residentMemoryKilobytes,
+    const activeCalls = mcpStatus.workers.reduce(
+      (sum, worker) => sum + worker.callsInFlight,
       0
     );
-    return `${formatMemory(totalKilobytes)} · ${mcpStatus.workers.length} worker${mcpStatus.workers.length === 1 ? "" : "s"}`;
+    return `${mcpStatus.workers.length} worker${mcpStatus.workers.length === 1 ? "" : "s"} · ${activeCalls} chamada(s)`;
   };
 
   onMount(() => {
@@ -251,7 +243,7 @@
   </section>
 
   <footer>
-    <strong title={mcpStatus.message}>MCP RAM · {mcpMemorySummary()}</strong>
+    <strong title={mcpStatus.message}>Supervisor · {mcpMemorySummary()}</strong>
     <div class="footer-actions">
       <button class="round-button" on:click={refresh} disabled={busy} title="Atualizar">↻</button>
       <button class="round-button" disabled title="Configurações">⚙</button>

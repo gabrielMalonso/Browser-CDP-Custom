@@ -100,7 +100,7 @@ impl Default for AppConfig {
                     default_url: Some("https://web.whatsapp.com/".to_string()),
                 },
                 ProfileConfig {
-                    id: "central-sp".to_string(),
+                    id: "financeiro-centralsp".to_string(),
                     name: "Financeiro/CentralSP".to_string(),
                     kind: "clinic".to_string(),
                     badge: "SP".to_string(),
@@ -160,11 +160,11 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert!(ids.contains(&"central-es"));
-        assert!(ids.contains(&"central-sp"));
+        assert!(ids.contains(&"financeiro-centralsp"));
         assert!(ids.contains(&"pessoal"));
         assert_eq!(config.profile("pessoal").unwrap().port, 9224);
         assert_eq!(config.profile("central-es").unwrap().port, 9222);
-        assert_eq!(config.profile("central-sp").unwrap().port, 9226);
+        assert_eq!(config.profile("financeiro-centralsp").unwrap().port, 9226);
     }
 
     #[test]

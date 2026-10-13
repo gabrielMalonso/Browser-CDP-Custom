@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "pessoal",
+      "aliases": [],
+      "name": "Pessoal",
+      "port": 9224,
+      "resourceGroup": "pessoal",
+      "platforms": {
+        "darwin": {
+          "profileRoot": "~/.chrome-cdp/pessoal",
+          "profileDirectory": "Default",
+          "browserAppName": "Google Chrome"
+        },
+        "linux": {
+          "profileRoot": "~/.chrome-cdp/pessoal",
+          "profileDirectory": "Default",
+          "browserExecutableCandidates": [
+            "google-chrome",
+            "google-chrome-stable",
+            "chromium",
+            "chromium-browser"
+          ]
+        }
+      }
+    },
+    {
+      "id": "central-es",
+      "aliases": ["es"],
+      "name": "Central ES",
+      "port": 9222,
+      "resourceGroup": "central-es",
+      "defaultUrl": "https://web.whatsapp.com/",
+      "platforms": {
+        "darwin": {
+          "profileRoot": "~/.chrome-cdp/central-es",
+          "profileDirectory": "Default",
+          "browserAppName": "Helium"
+        },
+        "linux": {
+          "profileRoot": "~/.chrome-cdp/central-es",
+          "profileDirectory": "Default",
+          "browserExecutableCandidates": [
+            "google-chrome",
+            "google-chrome-stable",
+            "chromium",
+            "chromium-browser"
+          ]
+        }
+      }
+    },
+    {
+      "id": "central-rj",
+      "aliases": ["rj"],
+      "name": "Central RJ",
+      "port": 9223,
+      "resourceGroup": "central-rj",
+      "defaultUrl": "https://web.whatsapp.com/",
+      "platforms": {
+        "darwin": {
+          "profileRoot": "~/.chrome-cdp/central-rj",
+          "profileDirectory": "Default",
+          "browserAppName": "Helium"
+        },
+        "linux": {
+          "profileRoot": "~/.chrome-cdp/central-rj",
+          "profileDirectory": "Default",
+          "browserExecutableCandidates": [
+            "google-chrome",
+            "google-chrome-stable",
+            "chromium",
+            "chromium-browser"
+          ]
+        }
+      }
+    },
+    {
+      "id": "financeiro-centralsp",
+      "aliases": ["central-sp", "sp", "financeiro-rossoni"],
+      "name": "Financeiro/CentralSP",
+      "port": 9226,
+      "resourceGroup": "financeiro-centralsp",
+      "defaultUrl": "https://web.whatsapp.com/",
+      "platforms": {
+        "darwin": {
+          "profileRoot": "~/.chrome-cdp/financeiro-centralsp-helium",
+          "profileDirectory": "Profile 1",
+          "browserAppName": "Helium"
+        },
+        "linux": {
+          "profileRoot": "~/.chrome-cdp/financeiro-centralsp",
+          "profileDirectory": "Default",
+          "browserExecutableCandidates": [
+            "google-chrome",
+            "google-chrome-stable",
+            "chromium",
+            "chromium-browser"
+          ]
+        }
+      }
+    }
+  ]
+}

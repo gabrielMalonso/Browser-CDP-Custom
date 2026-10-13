@@ -24,22 +24,75 @@ final class CustomCDPBrowserTests: XCTestCase {
         XCTAssertEqual(CDPProfile.visibleProfiles.first?.id, "pessoal")
     }
 
-    func testPessoalUsesGoogleChromeOfficialApp() {
+    func testPessoalUsesNativeGoogleChromeDefaultProfile() {
         let profile = CDPProfile.profile(withID: "pessoal")
 
         XCTAssertEqual(profile.browserAppName, "Google Chrome")
-        XCTAssertEqual(profile.profileRoot, "~/.chrome-cdp/pessoal")
+        XCTAssertEqual(profile.profileRoot, "~/Library/Application Support/Google/Chrome")
         XCTAssertEqual(profile.profileDirectory, "Default")
-        XCTAssertEqual(profile.port, 9224)
+        XCTAssertEqual(profile.launchMode, .native)
+        XCTAssertFalse(profile.isControlled)
+        XCTAssertEqual(profile.displayName, "Pessoal · Chrome")
+    }
+
+    func testControlledProfilesExcludeNativePessoalAndPreserveCDPPorts() {
+        XCTAssertEqual(CDPProfile.controlledProfiles.map(\.id), ["central-es", "central-rj", "financeiro-centralsp"])
+        XCTAssertEqual(CDPProfile.controlledProfiles.map(\.launchMode), [.cdp(port: 9222), .cdp(port: 9223), .cdp(port: 9226)])
+    }
+
+    func testNativeChromeLaunchTargetsDefaultWithoutCustomRootOrCDP() {
+        let profile = CDPProfile.defaultProfile
+        let arguments = NativeBrowserLauncher.arguments(for: profile, url: nil)
+        XCTAssertEqual(arguments, ["-n", "-a", "Google Chrome", "--args", "--profile-directory=Default", "--new-window"])
+
+        let url = URL(string: "https://example.com/a?q=hello%20world&next=%2Fpage#section")!
+        let linkArguments = NativeBrowserLauncher.arguments(for: profile, url: url)
+        XCTAssertEqual(linkArguments, ["-n", "-a", "Google Chrome", "--args", "--profile-directory=Default", url.absoluteString])
     }
 
     @MainActor
-    func testBrowserLaunchKeepsCDPTabsActiveForAutomation() {
-        let arguments = CDPProfileLauncher.launchArguments(for: CDPProfile.defaultProfile)
+    func testNativeOpeningAndLinkRoutingWorkWithoutSupervisor() async throws {
+        var openedProfiles: [CDPProfile] = []
+        var openedURLs: [URL?] = []
+        let launcher = CDPProfileLauncher(
+            gateway: MCPGatewayClient(baseURL: URL(string: "http://127.0.0.1:1")!, tokenProvider: { nil }),
+            nativeOpener: { profile, url in
+                openedProfiles.append(profile)
+                openedURLs.append(url)
+            }
+        )
+        let openResult: Result<Void, Error> = await withCheckedContinuation { continuation in
+            launcher.open(CDPProfile.defaultProfile) { continuation.resume(returning: $0) }
+        }
+        try openResult.get()
+        let url = URL(string: "https://example.com/native?test=1#section")!
+        let router = LinkRouter(launcher: launcher, userDefaults: UserDefaults(suiteName: "CustomCDPBrowserTests-\(UUID().uuidString)")!)
+        let routeResult: Result<Void, Error> = await withCheckedContinuation { continuation in
+            router.route([url], to: CDPProfile.defaultProfile) { continuation.resume(returning: $0) }
+        }
+        try routeResult.get()
+        XCTAssertEqual(openedProfiles, [CDPProfile.defaultProfile, CDPProfile.defaultProfile])
+        XCTAssertEqual(openedURLs, [nil, url])
+        XCTAssertFalse(launcher.gatewayAvailable)
+    }
 
-        XCTAssertTrue(arguments.contains("--disable-background-timer-throttling"))
-        XCTAssertTrue(arguments.contains("--disable-backgrounding-occluded-windows"))
-        XCTAssertTrue(arguments.contains("--disable-renderer-backgrounding"))
+    @MainActor
+    func testNativeProfileCannotBeClosedOrHaveWorkersReleased() {
+        let launcher = CDPProfileLauncher()
+        var closeRejected = false
+        launcher.close(CDPProfile.defaultProfile) { result in
+            if case .failure(let error) = result, case .profileNotControlled = error as? LauncherError {
+                closeRejected = true
+            }
+        }
+        var releaseRejected = false
+        launcher.disconnectMCPClients(for: CDPProfile.defaultProfile) { result in
+            if case .failure(let error) = result, case .profileNotControlled = error as? LauncherError {
+                releaseRejected = true
+            }
+        }
+        XCTAssertTrue(closeRejected)
+        XCTAssertTrue(releaseRejected)
     }
 
     func testNormalGoogleChromeDetectionExcludesCDPAndHelperProcesses() {
@@ -78,78 +131,6 @@ final class CustomCDPBrowserTests: XCTestCase {
     func testLegacyUnifiedProfileIDsResolveToFinanceiroCentralSP() {
         XCTAssertEqual(CDPProfile.profile(withID: "central-sp").id, "financeiro-centralsp")
         XCTAssertEqual(CDPProfile.profile(withID: "financeiro-rossoni").id, "financeiro-centralsp")
-    }
-
-    func testProfilesUseDownloadsAsManualDownloadDirectory() {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-
-        for profile in CDPProfile.visibleProfiles {
-            XCTAssertEqual(profile.expandedDownloadDirectory, "\(home)/Downloads")
-            XCTAssertTrue(profile.preferencesPath.hasSuffix("/\(profile.profileDirectory)/Preferences"))
-        }
-    }
-
-    @MainActor
-    func testDownloadPreferencesPreserveExistingKeys() {
-        let updatedPreferences = CDPProfileLauncher.preferencesWithDownloadDirectory(
-            [
-                "existing": "value",
-                "download": [
-                    "default_directory": "/tmp/old",
-                    "some_other_key": "kept",
-                ],
-                "savefile": [
-                    "default_directory": "/tmp/old-save",
-                    "another_key": "kept",
-                ],
-            ],
-            downloadDirectory: "/Users/gabrielalonso/Downloads"
-        )
-
-        let download = updatedPreferences["download"] as? [String: Any]
-        let savefile = updatedPreferences["savefile"] as? [String: Any]
-
-        XCTAssertEqual(updatedPreferences["existing"] as? String, "value")
-        XCTAssertEqual(download?["default_directory"] as? String, "/Users/gabrielalonso/Downloads")
-        XCTAssertEqual(download?["directory_upgrade"] as? Bool, true)
-        XCTAssertEqual(download?["prompt_for_download"] as? Bool, false)
-        XCTAssertEqual(download?["some_other_key"] as? String, "kept")
-        XCTAssertEqual(savefile?["default_directory"] as? String, "/Users/gabrielalonso/Downloads")
-        XCTAssertEqual(savefile?["another_key"] as? String, "kept")
-    }
-
-    @MainActor
-    func testNewTabEndpointPreservesQueryAndFragment() {
-        let url = URL(string: "https://example.com/path?q=one%20two&next=/x#section")!
-        let endpoint = CDPProfileLauncher.newTabEndpoint(for: url, port: 9224)
-        let encodedURL = endpoint.absoluteString.split(separator: "?", maxSplits: 1).last.map(String.init)
-
-        XCTAssertEqual(endpoint.scheme, "http")
-        XCTAssertEqual(endpoint.host, "127.0.0.1")
-        XCTAssertEqual(endpoint.port, 9224)
-        XCTAssertEqual(endpoint.path, "/json/new")
-        XCTAssertEqual(encodedURL?.removingPercentEncoding, url.absoluteString)
-    }
-
-    @MainActor
-    func testStartupURLUsesInitialURLBeforeProfileDefault() {
-        let profile = CDPProfile.profile(withID: "financeiro-centralsp")
-        let initialURL = URL(string: "https://example.com/received-link")!
-
-        XCTAssertEqual(
-            CDPProfileLauncher.startupURL(for: profile, initialURL: initialURL),
-            initialURL
-        )
-    }
-
-    @MainActor
-    func testStartupURLFallsBackToProfileDefault() {
-        let profile = CDPProfile.profile(withID: "financeiro-centralsp")
-
-        XCTAssertEqual(
-            CDPProfileLauncher.startupURL(for: profile, initialURL: nil)?.absoluteString,
-            "https://web.whatsapp.com/"
-        )
     }
 
     func testLsofProcessIDParsingDeduplicatesInStableOrder() {
@@ -442,6 +423,36 @@ final class CustomCDPBrowserTests: XCTestCase {
             MCPGatewayClient.gatewayToken(environment: [:], envFilePath: file.path),
             "from-file"
         )
+    }
+
+    func testMCPGatewayTokenReadsExportedEnvFile() throws {
+        let file = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("gateway-exported-token-\(UUID().uuidString).env")
+        try "export GABRIEL_BROWSERS_MCP_TOKEN='from-export'\n".write(to: file, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        XCTAssertEqual(
+            MCPGatewayClient.gatewayToken(environment: [:], envFilePath: file.path),
+            "from-export"
+        )
+    }
+
+    func testGatewayHealthRequiresCompleteSupervisorCapabilities() throws {
+        let compatible = try JSONDecoder().decode(
+            GatewayHealth.self,
+            from: Data("""
+            {"version":"0.2.1","capabilities":{"controlApi":1,"leases":true,"browserLifecycle":true}}
+            """.utf8)
+        )
+        let incomplete = try JSONDecoder().decode(
+            GatewayHealth.self,
+            from: Data("""
+            {"version":"0.2.1","capabilities":{"controlApi":1,"leases":false,"browserLifecycle":true}}
+            """.utf8)
+        )
+
+        XCTAssertTrue(compatible.isCompatible)
+        XCTAssertFalse(incomplete.isCompatible)
     }
 
     @MainActor

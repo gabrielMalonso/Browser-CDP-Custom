@@ -13,7 +13,10 @@ cd "$ROOT_DIR"
 RELEASE_DIR="$(swift build -c release --show-bin-path)"
 swift build -c release
 
-rm -rf "$APP_DIR"
+if [[ -e "$APP_DIR" ]]; then
+    # Keep the previous generated bundle recoverable when packaging again.
+    mv "$APP_DIR" "$ROOT_DIR/.build/app/$APP_NAME.previous-$(date +%Y%m%d-%H%M%S).app"
+fi
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp "$ROOT_DIR/.build/release/$EXECUTABLE_NAME" "$MACOS_DIR/$EXECUTABLE_NAME"
@@ -38,9 +41,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.1</string>
+    <string>0.1.4</string>
     <key>CFBundleVersion</key>
-    <string>3</string>
+    <string>6</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
@@ -64,5 +67,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+
+codesign --force --deep --sign - "$APP_DIR"
+codesign --verify --deep --strict "$APP_DIR"
 
 echo "$APP_DIR"

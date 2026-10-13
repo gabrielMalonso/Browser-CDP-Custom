@@ -1,0 +1,49 @@
+diff --git a/node_modules/playwright-core/lib/coreBundle.js b/node_modules/playwright-core/lib/coreBundle.js
+index 0758162..d379d8c 100644
+--- a/node_modules/playwright-core/lib/coreBundle.js
++++ b/node_modules/playwright-core/lib/coreBundle.js
+@@ -36724,7 +36724,7 @@ var init_crPage = __esm({
+         while (!this._sessions.has(frame._id)) {
+           const parent = frame.parentFrame();
+           if (!parent)
+-            throw new Error(`Frame has been detached.`);
++            return this._mainFrameSession;
+           frame = parent;
+         }
+         return this._sessions.get(frame._id);
+@@ -63015,7 +63015,10 @@ var init_tab = __esm({
+         let consoleCounts = { total: 0, errors: 0, warnings: 0 };
+         if (!this.crashed) {
+           await this._raceAgainstModalStates(async () => {
+-            title = await this.page.title();
++            title = await Promise.race([
++              this.page.title(),
++              new Promise((resolve) => setTimeout(() => resolve(""), 500))
++            ]);
+           });
+           consoleCounts = await this.consoleMessageCount();
+         }
+@@ -63849,11 +63852,12 @@ var init_response = __esm({
+         if (this._context.config.codegen !== "none" && this._code.length)
+           addSection("Ran Playwright code", this._code, "js");
+         const tabSnapshot = this._context.currentTab() ? await this._context.currentTabOrDie().captureSnapshot(this._includeSnapshotRoot, this._includeSnapshotDepth, this._includeSnapshotBoxes, this._clientWorkspace) : void 0;
+-        const tabHeaders = await Promise.all(this._context.tabs().map((tab2) => tab2.headerSnapshot()));
++        const tabHeaders = (await Promise.allSettled(this._context.tabs().map((tab2) => tab2.headerSnapshot()))).flatMap((result2) => result2.status === "fulfilled" ? [result2.value] : []);
+         if (this._includeSnapshot !== "none" || tabHeaders.some((header) => header.changed)) {
+           if (tabHeaders.length !== 1)
+             addSection("Open tabs", renderTabsMarkdown(tabHeaders));
+-          addSection("Page", renderTabMarkdown(tabHeaders.find((h) => h.current) ?? tabHeaders[0]));
++          if (tabHeaders.length)
++            addSection("Page", renderTabMarkdown(tabHeaders.find((h) => h.current) ?? tabHeaders[0]));
+         }
+         if (tabSnapshot?.modalStates.length)
+           addSection("Modal state", renderModalStates(this._context.config, tabSnapshot.modalStates));
+@@ -65490,7 +65494,7 @@ var init_tabs = __esm({
+             break;
+           }
+         }
+-        const tabHeaders = await Promise.all(context2.tabs().map((tab2) => tab2.headerSnapshot()));
++        const tabHeaders = (await Promise.allSettled(context2.tabs().map((tab2) => tab2.headerSnapshot()))).flatMap((result3) => result3.status === "fulfilled" ? [result3.value] : []);
+         const result2 = renderTabsMarkdown(tabHeaders);
+         response2.addTextResult(result2.join("\n"));
+       }

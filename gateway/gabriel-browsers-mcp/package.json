@@ -1,34 +1,33 @@
 {
   "name": "gabriel-browsers-mcp",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "bin": {
-    "gabriel-browsers-mcp": "dist/main.js"
+    "gabriel-browsers-mcp": "./dist/src/index.js",
+    "gabriel-browserctl": "./dist/src/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "cache-tools": "tsx src/cacheTools.ts",
-    "dev": "tsx watch src/main.ts",
-    "install-service": "bash scripts/install-systemd-user-service.sh",
-    "start": "node dist/main.js",
+    "dev": "tsx src/index.ts",
+    "generate:tools": "tsx scripts/generate-tool-cache.ts",
+    "postinstall": "patch-package",
+    "start": "node dist/src/index.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.29.0",
-    "@playwright/mcp": "0.0.77",
-    "express": "5.2.1",
-    "zod": "4.4.3"
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@playwright/mcp": "0.0.76"
   },
   "devDependencies": {
-    "@types/express": "5.0.6",
-    "@types/node": "24.10.1",
-    "tsx": "4.21.0",
-    "typescript": "5.9.3",
-    "vitest": "^4.1.10"
+    "@types/node": "24.0.4",
+    "patch-package": "^8.0.1",
+    "tsx": "4.20.3",
+    "typescript": "5.8.3",
+    "vitest": "3.2.7"
   },
-  "overrides": {
-    "esbuild": "0.28.1"
+  "engines": {
+    "node": ">=24"
   }
 }
